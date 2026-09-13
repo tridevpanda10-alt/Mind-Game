@@ -37,11 +37,20 @@ export function setDiamonds(n) {
   }
   return diamonds;
 }
+
+export class ApiError extends Error {
   constructor(status, code, detail) {
     super(detail || code);
     this.status = status;
     this.code = code;
   }
+}
+
+// Mint an absolute shareable referral link for the current deployment.
+export function referralLink(code) {
+  if (!code) return '';
+  const origin = (location.protocol === 'file:' ? 'https://mind-game.onrender.com' : location.origin);
+  return `${origin}/?ref=${encodeURIComponent(code)}`;
 }
 
 export async function api(method, path, body) {

@@ -41,6 +41,10 @@ export async function goHome() {
     }
 
     if (!me.isGuest) refreshTournament();
+    else {
+      const pill = $('#tournamentPill');
+      if (pill) { pill.textContent = 'Register to enter'; pill.className = 'pill'; }
+    }
     refreshReferral(me);
     void dailyAvailable;
     // fetch accuracy + streak asynchronously from profile
