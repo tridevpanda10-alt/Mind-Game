@@ -1,0 +1,20 @@
+{
+  "name": "competitive-reasoning-arena",
+  "version": "0.1.0",
+  "description": "Competitive Reasoning Arena - a server-authoritative competitive mental-skill game",
+  "type": "module",
+  "main": "src/server/index.js",
+  "scripts": {
+    "start": "node src/server/index.js",
+    "test": "node --test",
+    "test:engine": "node --test tests/engine.test.js",
+    "test:integration": "node --test tests/integration.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "express": "^4.22.2",
+    "express-rate-limit": "^8.7.0"
+  }
+}

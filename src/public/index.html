@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0e14" />
+  <title>Competitive Reasoning Arena</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0e14'/%3E%3Cpath d='M16 5l9 5v6c0 5.2-3.8 9.4-9 11-5.2-1.6-9-5.8-9-11v-6l9-5z' fill='none' stroke='%234cc9f0' stroke-width='2'/%3E%3Ccircle cx='16' cy='15' r='3' fill='%234cc9f0'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <div id="app">
+    <!-- Splash -->
+    <section id="screen-splash" class="screen" aria-label="Intro">
+      <div class="splash-seq" id="splashSeq"></div>
+    </section>
+
+    <!-- Auth -->
+    <section id="screen-auth" class="screen hidden" aria-label="Sign in">
+      <div class="auth-card card">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <h1>Competitive Reasoning Arena</h1>
+        </div>
+        <p class="tagline">Pure mental skill. Server-verified. Fair for everyone.</p>
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-auth-tab="login" role="tab" aria-selected="true">Sign in</button>
+          <button class="tab" data-auth-tab="register" role="tab" aria-selected="false">Create account</button>
+        </div>
+        <form id="authForm" novalidate>
+          <label class="field" id="nameField">
+            <span>Display name</span>
+            <input type="text" id="authName" maxlength="24" autocomplete="nickname" />
+          </label>
+          <label class="field">
+            <span>Email</span>
+            <input type="email" id="authEmail" maxlength="255" autocomplete="email" required />
+          </label>
+          <label class="field">
+            <span>Password</span>
+            <input type="password" id="authPass" minlength="8" maxlength="128" autocomplete="current-password" required />
+          </label>
+          <div id="authError" class="form-error" role="alert" hidden></div>
+          <button type="submit" class="btn primary full" id="authSubmit">Sign in</button>
+        </form>
+        <button class="btn ghost full" id="guestBtn">Practice as guest</button>
+        <p class="fineprint">Guests can train but cannot affect ratings or leaderboards.</p>
+      </div>
+    </section>
+
+    <!-- App shell -->
+    <div id="shell" class="hidden">
+      <aside class="sidebar">
+        <div class="brand small">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-name">Reasoning Arena</span>
+        </div>
+        <nav aria-label="Main">
+          <button class="nav-btn" data-nav="home">Home</button>
+          <button class="nav-btn" data-nav="play">Play</button>
+          <button class="nav-btn" data-nav="leaderboard">Ranking</button>
+          <button class="nav-btn" data-nav="profile">Profile</button>
+        </nav>
+        <button class="nav-btn logout" id="logoutBtn">Log out</button>
+      </aside>
+
+      <main id="main">
+        <!-- HOME -->
+        <section id="screen-home" class="screen hidden" aria-label="Home">
+          <header class="home-head">
+            <div>
+              <h2 id="greeting">Welcome back</h2>
+              <p class="sub" id="homeSub"></p>
+            </div>
+            <div class="stat-chips">
+              <div class="chip"><span class="chip-label">Rating</span><span class="chip-value" id="chipRating">–</span></div>
+              <div class="chip"><span class="chip-label">Level</span><span class="chip-value" id="chipLevel">–</span></div>
+              <div class="chip"><span class="chip-label">Streak</span><span class="chip-value" id="chipStreak">–</span></div>
+              <div class="chip"><span class="chip-label">Accuracy</span><span class="chip-value" id="chipAcc">–</span></div>
+            </div>
+          </header>
+          <div class="mode-grid">
+            <article class="card mode-card featured">
+              <h3>Daily Challenge</h3>
+              <p id="dailyDesc">Everyone solves the same puzzles today. One official attempt.</p>
+              <div class="row">
+                <span class="pill" id="dailyPill">Checking…</span>
+              </div>
+              <button class="btn primary" data-action="daily">Play Daily</button>
+            </article>
+            <article class="card mode-card">
+              <h3>Quick Match</h3>
+              <p>5 mixed puzzles. Ranked. Beat your average.</p>
+              <button class="btn" data-action="quick">Start Quick Match</button>
+            </article>
+            <article class="card mode-card">
+              <h3>Ranked</h3>
+              <p>Quick matches move your rating. Climb the board.</p>
+              <button class="btn" data-action="quick">Play Ranked</button>
+            </article>
+            <article class="card mode-card">
+              <h3>Training</h3>
+              <p>Pick a reasoning skill and difficulty. No rating risk.</p>
+              <button class="btn ghost" data-action="training">Enter Training</button>
+            </article>
+          </div>
+        </section>
+
+        <!-- TRAINING SETUP -->
+        <section id="screen-training" class="screen hidden" aria-label="Training setup">
+          <header class="screen-head"><h2>Training</h2></header>
+          <div class="card setup-card">
+            <h3>Reasoning skill</h3>
+            <div class="type-grid" id="typeGrid"></div>
+            <h3>Difficulty</h3>
+            <div class="diff-row" id="diffRow"></div>
+            <button class="btn primary full" id="startTraining">Start training session</button>
+          </div>
+        </section>
+
+        <!-- GAME -->
+        <section id="screen-game" class="screen hidden" aria-label="Puzzle">
+          <header class="game-head">
+            <button class="btn ghost small" id="exitMatch">Exit</button>
+            <div class="game-meta">
+              <span id="gameMode" class="pill"></span>
+              <span id="gameProgress"></span>
+              <span id="gameType" class="pill subtle"></span>
+              <span id="gameDiff" class="pill subtle"></span>
+            </div>
+            <div class="timer" id="gameTimer" role="timer" aria-label="Elapsed time">0:00</div>
+          </header>
+          <div class="game-body">
+            <p class="question" id="qText"></p>
+            <div id="qVisual"></div>
+            <div id="options" class="options"></div>
+            <div id="answerInputWrap" class="hidden">
+              <input type="text" id="answerInput" maxlength="64" autocomplete="off" />
+            </div>
+          </div>
+          <footer class="game-foot">
+            <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
+            <button class="btn primary" id="submitBtn">Submit</button>
+            <button class="btn primary" id="nextBtn" hidden>Next puzzle</button>
+            <button class="btn primary" id="finishBtn" hidden>See results</button>
+          </footer>
+        </section>
+
+        <!-- RESULTS -->
+        <section id="screen-results" class="screen hidden" aria-label="Results">
+          <header class="screen-head"><h2>Match complete</h2></header>
+          <div id="resultsBody" class="results"></div>
+          <div class="row end">
+            <button class="btn primary" id="resultsHome">Back home</button>
+          </div>
+        </section>
+
+        <!-- LEADERBOARD -->
+        <section id="screen-leaderboard" class="screen hidden" aria-label="Leaderboard">
+          <header class="screen-head"><h2>Ranking</h2></header>
+          <div class="tabs" role="tablist" id="lbTabs">
+            <button class="tab active" data-lb="daily" role="tab" aria-selected="true">Daily</button>
+            <button class="tab" data-lb="rating" role="tab" aria-selected="false">Rating</button>
+            <button class="tab" data-lb="xp" role="tab" aria-selected="false">XP</button>
+          </div>
+          <div id="lbBody" class="lb"></div>
+        </section>
+
+        <!-- PROFILE -->
+        <section id="screen-profile" class="screen hidden" aria-label="Profile">
+          <header class="screen-head"><h2>Profile</h2></header>
+          <div id="profileBody" class="profile"></div>
+        </section>
+      </main>
+    </div>
+
+    <nav class="bottom-nav" aria-label="Mobile navigation">
+      <button class="bnav" data-nav="home">Home</button>
+      <button class="bnav" data-nav="play">Play</button>
+      <button class="bnav" data-nav="leaderboard">Ranking</button>
+      <button class="bnav" data-nav="profile">Profile</button>
+    </nav>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <div id="spinner" class="spinner-overlay" hidden><div class="spinner" aria-label="Loading"></div></div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
