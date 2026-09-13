@@ -1,6 +1,7 @@
 // API client: single fetch wrapper, token storage, typed errors.
 
 const TOKEN_KEY = 'cra_token';
+const REF_CODE_KEY = 'cra_ref';
 
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY);
@@ -10,7 +11,32 @@ export function setToken(t) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
-export class ApiError extends Error {
+// Capture ?ref=CODE from the URL once so it can be applied at registration.
+export function captureReferralFromUrl() {
+  try {
+    const code = new URLSearchParams(location.search).get('ref');
+    if (code) localStorage.setItem(REF_CODE_KEY, code.slice(0, 16));
+  } catch { /* private mode etc. */ }
+}
+export function getStoredReferral() {
+  try { return localStorage.getItem(REF_CODE_KEY); } catch { return null; }
+}
+export function clearStoredReferral() {
+  try { localStorage.removeItem(REF_CODE_KEY); } catch { /* noop */ }
+}
+
+// ── diamonds balance cache (server is the source of truth) ────────────────
+let diamonds = 0;
+export function getDiamonds() {
+  return diamonds;
+}
+export function setDiamonds(n) {
+  if (Number.isFinite(n) && n >= 0) {
+    diamonds = n;
+    try { localStorage.setItem('cra_diamonds', String(n)); } catch { /* noop */ }
+  }
+  return diamonds;
+}
   constructor(status, code, detail) {
     super(detail || code);
     this.status = status;

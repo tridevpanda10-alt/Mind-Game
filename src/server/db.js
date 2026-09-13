@@ -24,7 +24,12 @@ CREATE TABLE IF NOT EXISTS players (
   total_answered INTEGER NOT NULL DEFAULT 0,
   fastest_ms     INTEGER,
   dailies_done   INTEGER NOT NULL DEFAULT 0,
-  settings_json  TEXT NOT NULL DEFAULT '{}'
+  settings_json  TEXT NOT NULL DEFAULT '{}',
+  diamonds            INTEGER NOT NULL DEFAULT 0,
+  last_login_bonus_at TEXT,
+  referral_code       TEXT UNIQUE,
+  referred_by         TEXT,
+  first_match_at      INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_players_rating ON players(rating DESC);
 
@@ -102,6 +107,40 @@ CREATE TABLE IF NOT EXISTS daily_usage (              -- one official attempt pe
   PRIMARY KEY (day, player_id)
 );
 
+CREATE TABLE IF NOT EXISTS hints (                    -- one purchased hint per puzzle max
+  match_id      TEXT NOT NULL,
+  player_id     TEXT NOT NULL REFERENCES players(player_id),
+  puzzle_index  INTEGER NOT NULL,
+  eliminated    TEXT NOT NULL,
+  created_at    INTEGER NOT NULL,
+  PRIMARY KEY (match_id, puzzle_index)
+);
+
+CREATE TABLE IF NOT EXISTS tournament_entries (       -- one diamonds-only entry per player per week
+  week        TEXT NOT NULL,                          -- Monday date (UTC) of that week
+  player_id   TEXT NOT NULL REFERENCES players(player_id),
+  match_id    TEXT NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'active',
+  paid_out    INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (week, player_id)
+);
+
+CREATE TABLE IF NOT EXISTS tournament_payouts (       -- set-once marker per week
+  week        TEXT PRIMARY KEY,
+  settled_at  INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS economy_log (              -- diamonds ledger (audit + daily quotas)
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  at         INTEGER NOT NULL,
+  player_id  TEXT NOT NULL REFERENCES players(player_id),
+  kind       TEXT NOT NULL,                           -- match_earn|hint|skip|login_bonus|ad_reward|referral|tournament_entry|tournament_prize
+  amount     INTEGER NOT NULL,
+  day        TEXT NOT NULL,
+  detail     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_economy_player_day ON economy_log(player_id, kind, day);
+
 CREATE TABLE IF NOT EXISTS audit_log (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   at          INTEGER NOT NULL,
@@ -118,6 +157,18 @@ export function initDb(dbPath) {
   mkdirSync(dirname(dbPath), { recursive: true });
   db = new DatabaseSync(dbPath);
   db.exec(SCHEMA);
+  // ── migrations (safe to re-run on an existing DB) ────────────────────────
+  // SQLite can't ADD COLUMN IF NOT EXISTS, so introspect before altering.
+  const cols = (t) => db.prepare(`PRAGMA table_info(${t})`).all().map((r) => r.name);
+  const addCol = (t, ddl) => { if (!cols(t).includes(ddl.match(/"?([A-Za-z_0-9]+)"?/)[1])) db.exec(`ALTER TABLE ${t} ADD COLUMN ${ddl}`); };
+  addCol('players', '"diamonds" INTEGER NOT NULL DEFAULT 0');
+  addCol('players', '"last_login_bonus_at" TEXT');
+  // Note: SQLite cannot ADD COLUMN with inline UNIQUE; the partial unique
+  // index below enforces referral-code uniqueness on existing databases.
+  addCol('players', '"referral_code" TEXT');
+  addCol('players', '"referred_by" TEXT');
+  addCol('players', '"first_match_at" INTEGER');
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_players_referral ON players(referral_code) WHERE referral_code IS NOT NULL');
   return db;
 }
 

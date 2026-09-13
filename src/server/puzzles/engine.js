@@ -134,17 +134,38 @@ function makePuzzleNoValidate(type, difficulty, seed) {
 
 // Generate a batch of puzzles for a match. Deterministic per seed: the same
 // seed always yields the same puzzle list (used by daily challenges and tests).
+// Uniqueness guarantee: no identical puzzle (same question + option set) may
+// appear twice in one batch — duplicates are re-rolled with fresh seeds.
 export function makePuzzleBatch(typeList, difficulty, seed, count) {
   const puzzles = [];
+  const seen = new Set(); // puzzle signatures already in this batch
   let s = seed >>> 0;
+  let misses = 0; // consecutive duplicate rolls before widening the net
   for (let i = 0; i < count; i++) {
     const type = typeList[i % typeList.length];
     let puzzle = null;
-    for (let attempt = 0; attempt < 30 && !puzzle; attempt++) {
+    for (let attempt = 0; attempt < 60 && !puzzle; attempt++) {
       s = (s * 1664525 + 1013904223) >>> 0; // LCG step per attempt
-      puzzle = makePuzzle(type, difficulty, s);
+      const candidate = makePuzzle(type, difficulty, s);
+      if (!candidate) continue;
+      const sig = puzzleSignature(candidate);
+      if (seen.has(sig)) {
+        // Widening jitter: after 10 duplicate rolls, perturb the seed so we
+        // cannot loop over the same small generator space forever.
+        if (++misses % 10 === 0) s = (s ^ (0x9e3779b9 + i * 0x85ebca6b + misses)) >>> 0;
+        continue;
+      }
+      seen.add(sig);
+      puzzle = candidate;
     }
     if (puzzle) puzzles.push(puzzle);
   }
   return puzzles;
+}
+
+// Stable identity of a puzzle's CONTENT: same question + same option set (in
+// any order) + same correct answer = the same puzzle, even if the id differs.
+export function puzzleSignature(p) {
+  const opts = p.options.map((o) => JSON.stringify(typeof o === 'object' && o !== null ? { ...o, id: null } : o)).sort().join('|');
+  return `${p.type}::${p.difficulty}::${p.question}::${opts}::${p.correct}`;
 }

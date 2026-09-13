@@ -7,9 +7,10 @@ import rateLimit from 'express-rate-limit';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { initDb, q, all, one, logAudit } from './db.js';
+import { initDb, q, all, one, transaction, logAudit } from './db.js';
 import { hashPassword, verifyPassword, newSessionToken, hashToken, newPlayerId } from './auth.js';
-import { startMatch, submitAnswer, finishMatch, abandonMatch, buildDailyTypes, puzzlePayload, takeKey } from './matchService.js';
+import { randomBytes } from 'node:crypto';
+import { startMatch, submitAnswer, finishMatch, abandonMatch, buildDailyTypes, puzzlePayload, takeKey, puzzlesRemaining, hintPuzzle, skipPuzzle, awardDailyLoginBonus, DIAMONDS, startTournamentMatch } from './matchService.js';
 import { MODES, levelProgress } from './scoring.js';
 import { seedFromString } from './puzzles/rng.js';
 
@@ -95,6 +96,10 @@ function badString(v, min, max) {
   return typeof v !== 'string' || v.length < min || v.length > max;
 }
 
+function newReferralCode() {
+  return randomBytes(5).toString('base64url').replace(/[-_]/g, 'A').slice(0, 8); // short, URL-safe, unique per UNIQUE constraint
+}
+
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -105,7 +110,7 @@ function dailySeed(day) {
 
 // ── AUTH ROUTES ───────────────────────────────────────────────────────────
 app.post('/api/auth/register', authLimiter, (req, res) => {
-  const { email, password, displayName } = req.body ?? {};
+  const { email, password, displayName, ref } = req.body ?? {};
   if (badString(email, 5, 255) || !EMAIL_RE.test(email)) return res.status(400).json({ error: 'bad_email' });
   if (badString(password, 8, 128)) return res.status(400).json({ error: 'bad_password', detail: 'Password must be 8-128 characters.' });
   if (badString(displayName, 2, 24)) return res.status(400).json({ error: 'bad_display_name' });
@@ -115,21 +120,33 @@ app.post('/api/auth/register', authLimiter, (req, res) => {
   const existing = one('SELECT player_id FROM players WHERE email = ?', [email.toLowerCase()]);
   if (existing) return res.status(409).json({ error: 'email_taken' });
 
+  // Referral: store the code only if it actually belongs to another player.
+  let referredBy = null;
+  if (typeof ref === 'string' && ref.length >= 4 && ref.length <= 16) {
+    const referrer = one('SELECT player_id FROM players WHERE referral_code = ?', [ref]);
+    if (referrer && referrer.player_id !== null) referredBy = ref;
+  }
+
   const { salt, hash } = hashPassword(password);
   const playerId = newPlayerId();
   const now = Date.now();
-  try {
-    q(
-      `INSERT INTO players (player_id, email, password_hash, salt, display_name, is_guest, created_at, last_active_at)
-       VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
-      [playerId, email.toLowerCase(), hash, salt, name, now, now],
-    );
-  } catch {
-    return res.status(500).json({ error: 'registration_failed' });
+  let referralCode = null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    referralCode = newReferralCode();
+    try {
+      q(
+        `INSERT INTO players (player_id, email, password_hash, salt, display_name, is_guest, created_at, last_active_at, referral_code, referred_by)
+         VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+        [playerId, email.toLowerCase(), hash, salt, name, now, now, referralCode, referredBy],
+      );
+      break;
+    } catch (e) {
+      if (attempt === 4) return res.status(500).json({ error: 'registration_failed' });
+    }
   }
   const token = createSession(playerId);
-  logAudit(playerId, 'register');
-  res.json({ token, playerId, displayName: name, isGuest: false });
+  logAudit(playerId, 'register', referredBy ? { referredBy } : null);
+  res.json({ token, playerId, displayName: name, isGuest: false, referralCode, diamonds: 0 });
 });
 
 app.post('/api/auth/login', authLimiter, (req, res) => {
@@ -147,7 +164,7 @@ app.post('/api/auth/login', authLimiter, (req, res) => {
   const token = createSession(player.player_id);
   q('UPDATE players SET last_active_at = ? WHERE player_id = ?', [Date.now(), player.player_id]);
   logAudit(player.player_id, 'login');
-  res.json({ token, playerId: player.player_id, displayName: player.display_name, isGuest: false });
+  res.json({ token, playerId: player.player_id, displayName: player.display_name, isGuest: false, referralCode: player.referral_code ?? null, diamonds: player.diamonds ?? 0 });
 });
 
 function createSession(playerId) {
@@ -165,7 +182,7 @@ app.post('/api/auth/guest', authLimiter, (req, res) => {
   );
   const token = createSession(playerId);
   logAudit(playerId, 'guest_session');
-  res.json({ token, playerId, displayName: 'Guest', isGuest: true });
+  res.json({ token, playerId, displayName: 'Guest', isGuest: true, referralCode: null, diamonds: 0 });
 });
 
 app.post('/api/auth/logout', requireAuth, (req, res) => {
@@ -175,7 +192,7 @@ app.post('/api/auth/logout', requireAuth, (req, res) => {
 });
 
 app.get('/api/me', requireAuth, (req, res) => {
-  const p = one('SELECT player_id, display_name, is_guest, xp, rating, created_at FROM players WHERE player_id = ?', [req.session.player_id]);
+  const p = one('SELECT player_id, display_name, is_guest, xp, rating, diamonds, referral_code, created_at, first_match_at FROM players WHERE player_id = ?', [req.session.player_id]);
   if (!p) return res.status(404).json({ error: 'no_player' });
   const prog = levelProgress(p.xp);
   const achievements = all('SELECT achievement, unlocked_at FROM achievements WHERE player_id = ? ORDER BY unlocked_at DESC', [p.player_id]);
@@ -187,6 +204,9 @@ app.get('/api/me', requireAuth, (req, res) => {
     rating: p.rating,
     level: prog.level,
     levelProgress: prog,
+    diamonds: p.diamonds ?? 0,
+    referralCode: p.referral_code ?? null,
+    firstMatchAt: p.first_match_at ?? null,
     achievements,
   });
 });
@@ -202,11 +222,12 @@ function validTypes(v) {
 }
 
 app.post('/api/match/training', requireAuth, (req, res) => {
-  const { types, difficulty, seed } = req.body ?? {};
+  const { types, difficulty, seed, count } = req.body ?? {};
   const t = validTypes(types) ?? ALL_TYPES;
   const d = DIFFS.includes(difficulty) ? difficulty : 'medium';
   const s = Number.isInteger(seed) && seed > 0 ? seed >>> 0 : undefined; // training only
-  const out = startMatch({ playerId: req.session.player_id, mode: MODES.TRAINING, seed: s, types: t, difficulty: d });
+  const n = Number.isInteger(count) && count > 0 ? Math.min(30, count) : undefined; // player-chosen, max 30
+  const out = startMatch({ playerId: req.session.player_id, mode: MODES.TRAINING, seed: s, types: t, difficulty: d, count: n });
   if (out.error) return res.status(500).json(out);
   res.json({ matchId: out.matchId, puzzles: out.puzzles, parTimes: out.parTimes });
 });
@@ -270,11 +291,197 @@ app.post('/api/match/:matchId/finish', submitLimiter, requireAuth, (req, res) =>
     const code = { not_your_match: 403, already_finished: 409, match_not_found_or_expired: 404, no_player: 404 }[out.error] ?? 400;
     return res.status(code).json(out);
   }
-  res.json(out);
+  // Referral reward: the referrer earns diamonds only after the invited
+  // player finishes their FIRST match (not on signup — that would invite
+  // fake-account farming). Guest sessions never count.
+  const referral = maybePayReferrer(req.session.player_id);
+  res.json({ ...out, referralBonus: referral });
 });
+
+function maybePayReferrer(playerId) {
+  const out = transaction(() => {
+    const p = one('SELECT is_guest, referred_by, first_match_at FROM players WHERE player_id = ?', [playerId]);
+    if (!p || p.is_guest || !p.referred_by || p.first_match_at) return { paid: false };
+    const referrer = one('SELECT player_id FROM players WHERE referral_code = ?', [p.referred_by]);
+    if (!referrer) return { paid: false };
+    q('UPDATE players SET first_match_at = ? WHERE player_id = ?', [Date.now(), playerId]);
+    q('UPDATE players SET diamonds = diamonds + ? WHERE player_id = ?', [DIAMONDS.referralBonus, referrer.player_id]);
+    q('INSERT INTO economy_log (at, player_id, kind, amount, day, detail) VALUES (?, ?, ?, ?, ?, ?)', [Date.now(), referrer.player_id, 'referral', DIAMONDS.referralBonus, todayKey(), `invited:${playerId}`]);
+    logAudit(referrer.player_id, 'referral_reward', { invited: playerId, amount: DIAMONDS.referralBonus });
+    return { paid: true, amount: DIAMONDS.referralBonus };
+  });
+  return out;
+}
+
+// ── TOURNAMENT PRIZES (diamonds only; settled lazily on leaderboard read) ──
+const TOURNAMENT_PAYOUTS = [
+  { position: 1, diamonds: 50 },
+  { position: 2, diamonds: 30 },
+  { position: 3, diamonds: 15 },
+];
+const TOURNAMENT_PRIZE_BASE = 100; // extra diamonds added to the pool from house
+
+function settleTournamentPayouts(week) {
+  const prizePool = TOURNAMENT_PRIZE_BASE + one('SELECT COUNT(*) AS n FROM tournament_entries WHERE week = ?', [week]).n * DIAMONDS.tournamentEntry;
+  const settled = one('SELECT COUNT(*) AS n FROM tournament_payouts WHERE week = ?', [week]).n > 0;
+  if (!settled) {
+    transaction(() => {
+      const rows = all(
+        `SELECT te.player_id, mp.score, mp.elapsed_ms
+         FROM tournament_entries te JOIN match_players mp ON mp.match_id = te.match_id AND mp.player_id = te.player_id
+         WHERE te.week = ? AND mp.status = 'completed'
+         ORDER BY mp.score DESC, mp.elapsed_ms ASC`,
+        [week],
+      );
+      for (const payout of TOURNAMENT_PAYOUTS) {
+        const winner = rows[payout.position - 1];
+        if (!winner) continue;
+        q('UPDATE players SET diamonds = diamonds + ? WHERE player_id = ?', [payout.diamonds, winner.player_id]);
+        q('UPDATE tournament_entries SET paid_out = 1 WHERE week = ? AND player_id = ?', [week, winner.player_id]);
+        q('INSERT INTO economy_log (at, player_id, kind, amount, day, detail) VALUES (?, ?, ?, ?, ?, ?)', [Date.now(), winner.player_id, 'tournament_prize', payout.diamonds, todayKey(), `week:${week} pos:${payout.position}`]);
+        logAudit(winner.player_id, 'tournament_prize', { week, position: payout.position, amount: payout.diamonds });
+      }
+      q('INSERT INTO tournament_payouts (week, settled_at) VALUES (?, ?)', [week, Date.now()]);
+    });
+  }
+  return { prizePool, schedule: TOURNAMENT_PAYOUTS };
+}
 
 app.post('/api/match/:matchId/abandon', requireAuth, (req, res) => {
   res.json(abandonMatch(req.params.matchId, req.session.player_id));
+});
+
+// How many puzzles are left in an active match (used by "practice the rest").
+app.get('/api/match/:matchId/remaining', requireAuth, (req, res) => {
+  const out = puzzlesRemaining({ matchId: req.params.matchId, playerId: req.session.player_id });
+  if (!out) return res.status(404).json({ error: 'match_not_found_or_expired' });
+  res.json(out);
+});
+
+// ── ECONOMY ROUTES (all server-validated; client never sends a balance) ───
+function diamondsOf(playerId) {
+  const p = one('SELECT diamonds FROM players WHERE player_id = ?', [playerId]);
+  return p ? p.diamonds : 0;
+}
+
+app.get('/api/wallet', requireAuth, (req, res) => {
+  res.json({ diamonds: diamondsOf(req.session.player_id) });
+});
+
+// Daily login bonus: +5 diamonds once per calendar day, auto-claimed on load.
+app.post('/api/bonus/daily', requireAuth, (req, res) => {
+  const out = awardDailyLoginBonus(req.session.player_id);
+  res.json({ ok: out.ok, diamonds: diamondsOf(req.session.player_id), amount: out.ok ? out.amount : 0 });
+});
+
+// Buy a hint: eliminates one incorrect option on the current puzzle.
+// Max 1 per puzzle. Does NOT reveal the answer.
+app.post('/api/hint', submitLimiter, requireAuth, (req, res) => {
+  const { matchId, puzzleIndex } = req.body ?? {};
+  if (typeof matchId !== 'string' || matchId.length > 64) return res.status(400).json({ error: 'bad_match_id' });
+  const out = hintPuzzle({ matchId, playerId: req.session.player_id, puzzleIndex });
+  if (out.error) {
+    const code = { insufficient_diamonds: 402, hint_limit_reached: 409, already_answered: 409, match_closed: 409, not_your_match: 403, match_not_found_or_expired: 404, bad_index: 400 }[out.error] ?? 400;
+    return res.status(code).json(out);
+  }
+  res.json(out);
+});
+
+// Skip the current puzzle: scored as incorrect, lets the player move on.
+// Max 1 per match.
+app.post('/api/skip', submitLimiter, requireAuth, (req, res) => {
+  const { matchId, puzzleIndex } = req.body ?? {};
+  if (typeof matchId !== 'string' || matchId.length > 64) return res.status(400).json({ error: 'bad_match_id' });
+  const out = skipPuzzle({ matchId, playerId: req.session.player_id, puzzleIndex });
+  if (out.error) {
+    const code = { insufficient_diamonds: 402, skip_limit_reached: 409, already_answered: 409, match_closed: 409, not_your_match: 403, match_not_found_or_expired: 404, bad_index: 400 }[out.error] ?? 400;
+    return res.status(code).json(out);
+  }
+  res.json(out);
+});
+
+// ── TOURNAMENT (entry costs diamonds only — never cash) ───────────────────
+function weekKey(now = new Date()) {
+  const d = new Date(now);
+  const day = (d.getUTCDay() + 6) % 7; // Monday=0
+  d.setUTCDate(d.getUTCDate() - day);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+function tournamentSeed(week) {
+  return seedFromString((process.env.TOURNAMENT_SEED_SECRET ?? DEV_SECRET) + ':week:' + week);
+}
+
+app.get('/api/tournament/status', requireAuth, (req, res) => {
+  const week = weekKey();
+  const usage = one('SELECT * FROM tournament_entries WHERE week = ? AND player_id = ?', [week, req.session.player_id]);
+  const pool = one('SELECT COUNT(*) AS n FROM tournament_entries WHERE week = ?', [week]);
+  res.json({
+    week,
+    entered: Boolean(usage),
+    finished: usage ? usage.status : null,
+    entryCost: DIAMONDS.tournamentEntry,
+    prizePool: pool.n * DIAMONDS.tournamentEntry + TOURNAMENT_PRIZE_BASE,
+    entrants: pool.n,
+    matchId: usage?.match_id ?? null,
+  });
+});
+
+app.post('/api/tournament/enter', submitLimiter, requirePlayer, (req, res) => {
+  const week = weekKey();
+  const existing = one('SELECT * FROM tournament_entries WHERE week = ? AND player_id = ?', [week, req.session.player_id]);
+  if (existing && existing.status !== 'active') return res.status(409).json({ error: 'tournament_already_played', detail: 'One tournament entry per player per week.' });
+  if (existing && existing.status === 'active') {
+    const entry = takeKey(existing.match_id);
+    if (entry) {
+      return res.json({ matchId: existing.match_id, resumed: true, puzzles: entry.puzzles.map((p) => puzzlePayload(p)), parTimes: entry.puzzles.map(() => 0) });
+    }
+  }
+  const out = transaction(() => {
+    const p = one('SELECT diamonds FROM players WHERE player_id = ?', [req.session.player_id]);
+    if (!p) return { error: 'no_player' };
+    if (p.diamonds < DIAMONDS.tournamentEntry) return { error: 'insufficient_diamonds' };
+    const started = startTournamentMatch({ playerId: req.session.player_id, seed: tournamentSeed(week) });
+    if (started.error) return started;
+    q('UPDATE players SET diamonds = diamonds - ? WHERE player_id = ? AND diamonds >= ?', [DIAMONDS.tournamentEntry, req.session.player_id, DIAMONDS.tournamentEntry]);
+    q('INSERT INTO tournament_entries (week, player_id, match_id, status) VALUES (?, ?, ?, ?)', [week, req.session.player_id, started.matchId, 'active']);
+    q('INSERT INTO economy_log (at, player_id, kind, amount, day, detail) VALUES (?, ?, ?, ?, ?, ?)', [Date.now(), req.session.player_id, 'tournament_entry', -DIAMONDS.tournamentEntry, todayKey(), week]);
+    logAudit(req.session.player_id, 'tournament_enter', { week });
+    return started;
+  });
+  if (out.error) {
+    const code = { insufficient_diamonds: 402, no_player: 404 }[out.error] ?? 500;
+    return res.status(code).json(out);
+  }
+  res.json({ matchId: out.matchId, puzzles: out.puzzles, parTimes: out.parTimes });
+});
+
+app.get('/api/leaderboard/tournament', requireAuth, (req, res) => {
+  const week = weekKey();
+  const payouts = settleTournamentPayouts(week);
+  const rows = all(
+    `SELECT p.display_name, mp.score, mp.correct_count, mp.total_count, mp.elapsed_ms, te.paid_out
+     FROM tournament_entries te
+     JOIN match_players mp ON mp.match_id = te.match_id AND mp.player_id = te.player_id
+     JOIN players p ON p.player_id = te.player_id
+     WHERE te.week = ? AND mp.status = 'completed'
+     ORDER BY mp.score DESC, mp.elapsed_ms ASC LIMIT 50`,
+    [week],
+  );
+  res.json({
+    week,
+    prizePool: payouts.prizePool,
+    payouts: payouts.schedule.map((s) => ({ position: s.position, diamonds: s.diamonds })),
+    entries: rows.map((r, i) => ({
+      position: i + 1,
+      displayName: r.display_name,
+      score: r.score,
+      correct: r.correct_count,
+      total: r.total_count,
+      elapsedMs: r.elapsed_ms,
+      paidOut: Boolean(r.paid_out),
+    })),
+  });
 });
 
 // ── PROFILE & LEADERBOARD ─────────────────────────────────────────────────
@@ -351,6 +558,9 @@ app.get('/api/leaderboard', requireAuth, (req, res) => {
   res.json({ board, page, hasMore, entries: list, myPosition });
 });
 
+// AFFILIATE_SLOT: reserved banner/ad slot for a future approved external
+// affiliate partner. Intentionally left empty — no fabricated partner URLs.
+
 // daily leaderboard: completed daily matches for today
 app.get('/api/leaderboard/daily', requireAuth, (req, res) => {
   const day = todayKey();
@@ -363,6 +573,31 @@ app.get('/api/leaderboard/daily', requireAuth, (req, res) => {
     [day],
   );
   res.json({ day, entries: rows.map((r, i) => ({ position: i + 1, displayName: r.display_name, score: r.score, correct: r.correct_count, total: r.total_count, elapsedMs: r.elapsed_ms })) });
+});
+
+// ── AD REWARDS (placeholder ads; server enforces the daily quota) ─────────
+// TODO: swap for real ad SDK (AdSense/AdMob) — until then this endpoint trusts
+// the client's "ad watched" signal for a small, hard-capped diamond reward.
+const AD_REWARD_DAILY_LIMIT = 5;
+app.post('/api/ad-reward', submitLimiter, requireAuth, (req, res) => {
+  const day = todayKey();
+  const used = one("SELECT COUNT(*) AS n FROM economy_log WHERE player_id = ? AND kind = 'ad_reward' AND day = ?", [req.session.player_id, day]);
+  if (used.n >= AD_REWARD_DAILY_LIMIT) return res.status(429).json({ error: 'ad_reward_limit_reached', detail: `Rewarded ads are limited to ${AD_REWARD_DAILY_LIMIT} per day.` });
+  transaction(() => {
+    q('UPDATE players SET diamonds = diamonds + ? WHERE player_id = ?', [DIAMONDS.adReward, req.session.player_id]);
+    q('INSERT INTO economy_log (at, player_id, kind, amount, day) VALUES (?, ?, ?, ?, ?)', [Date.now(), req.session.player_id, 'ad_reward', DIAMONDS.adReward, day]);
+  });
+  logAudit(req.session.player_id, 'ad_reward', { amount: DIAMONDS.adReward });
+  res.json({ ok: true, diamonds: diamondsOf(req.session.player_id), amount: DIAMONDS.adReward, remainingToday: AD_REWARD_DAILY_LIMIT - used.n - 1 });
+});
+
+// ── REFERRAL (affiliate slot reserved; diamonds only, no cash value) ──────
+app.get('/api/me/referral', requireAuth, (req, res) => {
+  const p = one('SELECT referral_code FROM players WHERE player_id = ?', [req.session.player_id]);
+  const code = p?.referral_code ?? null;
+  const invited = code ? one('SELECT COUNT(*) AS n FROM players WHERE referred_by = ?', [code]).n : 0;
+  const rewarded = code ? one('SELECT COUNT(*) AS n FROM players WHERE referred_by = ? AND first_match_at IS NOT NULL', [code]).n : 0;
+  res.json({ referralCode: code, invited, rewarded });
 });
 
 // ── static frontend ───────────────────────────────────────────────────────
@@ -382,6 +617,7 @@ app.use((req, res) => res.sendFile(join(PUBLIC, 'index.html')));
 app.use((err, req, res, next) => {
   if (err?.type === 'entity.parse.failed') return res.status(400).json({ error: 'bad_json' });
   if (err?.type === 'entity.too.large') return res.status(413).json({ error: 'payload_too_large' });
+  console.error(`[server_error] ${req?.method} ${req?.path}:`, err?.stack ?? err);
   logAudit(null, 'server_error', { message: String(err?.message ?? err).slice(0, 200) });
   res.status(500).json({ error: 'internal_error' });
 });

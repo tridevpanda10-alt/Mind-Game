@@ -1,9 +1,11 @@
 // Game screen controller: owns match state, timer, and answer flow.
 // Server is authoritative; client only displays and sends actions.
+// Diamonds are never computed here — the server returns the new balance.
 
-import { api } from '../api.js';
+import { api, getDiamonds, setDiamonds } from '../api.js';
 import { $, $$, el, showScreen, fmtClock, fmtMs, toast, spinner } from '../ui.js';
-import { renderQuestion, renderOption, typeLabel, needsTextInput } from '../render.js';
+import { renderQuestion, renderOption, typeLabel } from '../render.js';
+import { matchTheme, theme } from '../theme.js';
 
 const state = {
   matchId: null,
@@ -17,6 +19,8 @@ const state = {
   timerInterval: null,
   seconds: 0,
   finished: false,
+  eliminated: [], // option ids hidden by hints on the current puzzle
+  skipped: 0,
 };
 
 export function getState() {
@@ -41,12 +45,41 @@ function stopTimer() {
   if (t) { t.textContent = '0:00'; t.classList.remove('warn'); }
 }
 
+// Show the themed case briefing before the first clue of a match.
+function showIntro(mode, beginFn) {
+  const t = matchTheme(mode);
+  $('#introKind').textContent = mode === 'training' ? 'Field Exercise' : mode === 'daily' ? 'Daily Case' : mode === 'tournament' ? 'Weekly Case' : 'Ranked Case';
+  $('#introTitle').textContent = t.title;
+  $('#introFlavor').textContent = t.flavor;
+  $('#introMeta').textContent = state.puzzles.length
+    ? `${state.puzzles.length} ${t.noun}${state.puzzles.length === 1 ? '' : 's'} · one ${t.noun} at a time`
+    : '';
+  const begin = $('#introBegin');
+  begin.textContent = t.begin;
+  begin.onclick = () => beginFn();
+  showScreen('#screen-intro');
+}
+
+function updateEconomyButtons() {
+  const balance = getDiamonds();
+  const g = theme.screens.game;
+  const hintBtn = $('#hintBtn');
+  const skipBtn = $('#skipBtn');
+  const alreadyAnswered = Boolean(state.answers[state.index]);
+  hintBtn.hidden = alreadyAnswered || state.eliminated.length > 0;
+  hintBtn.disabled = balance < g.hintCost;
+  hintBtn.textContent = `${g.hintButton} (${g.hintCost} 💎)`;
+  skipBtn.hidden = alreadyAnswered || state.mode === 'training' || state.skipped >= 1;
+  skipBtn.disabled = balance < g.skipCost;
+  skipBtn.textContent = `${g.skipButton} (${g.skipCost} 💎)`;
+}
+
 export async function startMatch(mode, opts = {}) {
   spinner(true);
   try {
-    const path = mode === 'daily' ? '/api/match/daily' : mode === 'quick' ? '/api/match/quick' : '/api/match/training';
+    const path = mode === 'daily' ? '/api/match/daily' : mode === 'quick' ? '/api/match/quick' : mode === 'tournament' ? '/api/tournament/enter' : '/api/match/training';
     const out = await api('POST', path, opts.body ?? {});
-    if (out.resumed) toast('Resuming your daily attempt.');
+    if (out.resumed) toast('Resuming your attempt.');
     state.matchId = out.matchId;
     state.mode = mode;
     state.puzzles = out.puzzles;
@@ -54,12 +87,19 @@ export async function startMatch(mode, opts = {}) {
     state.index = 0;
     state.answers = [];
     state.finished = false;
+    state.eliminated = [];
+    state.skipped = 0;
     sessionStorage.setItem('cra_match', JSON.stringify({ matchId: out.matchId, mode, index: 0 }));
-    showScreen('#screen-game');
-    renderPuzzle();
+    if (typeof out.diamonds === 'number') setDiamonds(out.diamonds);
+    showIntro(mode, () => {
+      showScreen('#screen-game');
+      renderPuzzle();
+    });
     return out;
   } catch (err) {
-    toast(err.detail ?? err.message ?? 'Could not start the match.');
+    if (err.code === 'insufficient_diamonds') toast('Not enough diamonds to enter. Watch an ad on the results screen or play a match to earn more.');
+    else if (err.code === 'tournament_already_played') toast(err.detail ?? 'You already played this week\u2019s tournament.');
+    else toast(err.detail ?? err.message ?? 'Could not start the match.');
     return null;
   } finally {
     spinner(false);
@@ -68,8 +108,10 @@ export async function startMatch(mode, opts = {}) {
 
 function renderPuzzle() {
   const p = state.puzzles[state.index];
-  $('#gameMode').textContent = state.mode === 'daily' ? 'Daily' : state.mode === 'quick' ? 'Quick Match' : 'Training';
-  $('#gameProgress').textContent = `${state.index + 1} / ${state.puzzles.length}`;
+  const t = matchTheme(state.mode);
+  $('#gameMode').textContent = state.mode === 'daily' ? 'Daily' : state.mode === 'quick' ? 'Quick Match' : state.mode === 'tournament' ? 'Tournament' : 'Training';
+  // Reuse the existing index/length progress state; theme supplies the wording.
+  $('#gameProgress').textContent = theme.screens.game.progress(state.index + 1, state.puzzles.length);
   $('#gameType').textContent = typeLabel(p.type);
   $('#gameDiff').textContent = p.difficulty;
   $('#qText').textContent = p.question;
@@ -82,6 +124,7 @@ function renderPuzzle() {
   const optsWrap = $('#options');
   optsWrap.replaceChildren();
   state.selected = null;
+  state.eliminated = [];
   p.options.forEach((opt, i) => {
     const btn = el('button', {
       class: 'opt',
@@ -100,6 +143,7 @@ function renderPuzzle() {
   $('#submitBtn').disabled = true;
   $('#nextBtn').hidden = true;
   $('#finishBtn').hidden = true;
+  updateEconomyButtons();
   startTimer();
   state.puzzleStart = performance.now();
 }
@@ -108,6 +152,76 @@ function selectOption(i) {
   state.selected = i;
   $$('#options .opt').forEach((b, bi) => b.classList.toggle('selected', bi === i));
   $('#submitBtn').disabled = false;
+}
+
+async function useHint() {
+  const g = theme.screens.game;
+  const p = state.puzzles[state.index];
+  // Watch an ad to earn the hint when the balance is too low.
+  if (getDiamonds() < g.hintCost) {
+    toast('Not enough diamonds — watch a short ad instead?');
+    const { showRewardedAd } = await import('../ads.js');
+    const watched = await showRewardedAd();
+    if (!watched) return;
+    try {
+      const reward = await api('POST', '/api/ad-reward', {});
+      setDiamonds(reward.diamonds);
+      toast(`+${reward.amount} 💎`);
+    } catch (err) {
+      toast(err.detail ?? 'Ad reward unavailable right now.');
+      return;
+    }
+  }
+  spinner(true);
+  try {
+    const out = await api('POST', '/api/hint', { matchId: state.matchId, puzzleIndex: state.index });
+    setDiamonds(out.diamondsLeft);
+    state.eliminated.push(out.eliminate);
+    const optId = (o) => String(o.id ?? o);
+    $$('#options .opt').forEach((b, bi) => {
+      if (optId(p.options[bi]) === String(out.eliminate)) {
+        b.classList.add('eliminated');
+        b.disabled = true;
+        if (state.selected === bi) {
+          state.selected = null;
+          $('#submitBtn').disabled = true;
+        }
+      }
+    });
+    toast('One wrong option eliminated.');
+    updateEconomyButtons();
+  } catch (err) {
+    if (err.code === 'hint_limit_reached') toast('Only one hint per clue.');
+    else if (err.code === 'insufficient_diamonds') toast('Not enough diamonds.');
+    else toast(err.detail ?? 'Hint unavailable.');
+  } finally {
+    spinner(false);
+  }
+}
+
+async function useSkip() {
+  const g = theme.screens.game;
+  spinner(true);
+  try {
+    const out = await api('POST', '/api/skip', { matchId: state.matchId, puzzleIndex: state.index });
+    setDiamonds(out.diamondsLeft);
+    state.skipped++;
+    stopTimer();
+    state.answers[state.index] = { correct: false, msTaken: 0, skipped: true };
+    const fb = $('#feedback');
+    fb.className = 'feedback warn';
+    fb.textContent = `Clue skipped (−${g.skipCost} 💎). Scored as incorrect — moving on.`;
+    $('#submitBtn').hidden = true;
+    const last = state.index === state.puzzles.length - 1;
+    if (last) $('#finishBtn').hidden = false;
+    else $('#nextBtn').hidden = false;
+  } catch (err) {
+    if (err.code === 'skip_limit_reached') toast('Only one skip per match.');
+    else if (err.code === 'insufficient_diamonds') toast('Not enough diamonds to skip.');
+    else toast(err.detail ?? 'Skip unavailable.');
+  } finally {
+    spinner(false);
+  }
 }
 
 async function submitCurrent() {
@@ -208,5 +322,7 @@ export function initGame({ onResults }) {
   $('#nextBtn').addEventListener('click', advance);
   $('#finishBtn').addEventListener('click', finish);
   $('#exitMatch').addEventListener('click', exitMatch);
+  $('#hintBtn').addEventListener('click', useHint);
+  $('#skipBtn').addEventListener('click', useSkip);
   state.onResults = onResults;
 }

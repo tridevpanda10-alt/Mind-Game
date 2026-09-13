@@ -9,15 +9,23 @@ import { newMatchId } from './auth.js';
 import { q, all, one, transaction, logAudit } from './db.js';
 import { getDb } from './db.js';
 
-export const PUZZLES_PER_MATCH = 5;
+// Puzzle counts per mode. Quick/ranked matches are 12 clues; the daily stays
+// short (5-7) so every player can realistically finish it once per day.
+export const PUZZLES_PER_MODE = { training: 10, quick: 12, daily: 6, tournament: 6 };
+export const TRAINING_MAX = 30;
+// Kept as an alias for backwards compatibility (tests/older callers).
+export const PUZZLES_PER_MATCH = PUZZLES_PER_MODE.quick;
 
 // In-memory answer keys. Dev-scale single process: intentional, bounded by
 // the TTL sweep. Multi-instance production would move this to the DB.
 const activeKeys = new Map();
 const KEY_TTL_MS = 60 * 60 * 1000;
+// Max 1 hint per puzzle, max 1 skip per match (Phase 3 limits).
+const HINT_LIMIT_PER_PUZZLE = 1;
+const SKIP_LIMIT = 1;
 
 function storeKey(matchId, puzzles) {
-  activeKeys.set(matchId, { puzzles, created: Date.now() });
+  activeKeys.set(matchId, { puzzles, created: Date.now(), usedSkips: 0, hints: new Map() });
   if (activeKeys.size > 800) {
     const now = Date.now();
     for (const [k, v] of activeKeys) {
@@ -45,11 +53,31 @@ export function buildDailyTypes(day) {
   return allTypes.slice(0, 4 + (day.length % 3));
 }
 
+// Daily keeps 5-7 puzzles: short on purpose so everyone can finish it daily.
+export const DAILY_COUNT = PUZZLES_PER_MODE.daily;
+export function dailyCount() {
+  return DAILY_COUNT;
+}
+
+// Weekly tournament: one fixed seeded puzzle set per week (same length as a
+// daily case). The caller supplies the week seed; entry costs diamonds.
+export function startTournamentMatch({ playerId, seed }) {
+  const allTypes = ['pattern', 'sequence', 'matrix', 'deduction', 'conditional', 'number', 'operator', 'spatial', 'mastermind'];
+  return startMatch({ playerId, mode: MODES.TOURNAMENT, seed, types: allTypes, difficulty: 'medium' });
+}
+
+// Quick/ranked length: 12 clues (raised from the original flat 5).
+export function puzzlesForMode(mode) {
+  return PUZZLES_PER_MODE[mode] ?? PUZZLES_PER_MODE.training;
+}
+
 // Create a match row and hold its answer key. Returns public puzzle list.
-export function startMatch({ playerId, mode, seed, types, difficulty, dailyDay = null }) {
+export function startMatch({ playerId, mode, seed, types, difficulty, dailyDay = null, count = null }) {
   const matchId = newMatchId();
   const seedUsed = seed ?? ((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0);
-  const puzzleList = makePuzzleBatch(types, difficulty, seedUsed, PUZZLES_PER_MATCH);
+  // Training is player-chosen (default 10, capped at 30); ranked modes use fixed per-mode counts.
+  const requested = mode === MODES.TRAINING ? (Number.isInteger(count) ? Math.max(1, Math.min(TRAINING_MAX, count)) : PUZZLES_PER_MODE.training) : puzzlesForMode(mode);
+  const puzzleList = makePuzzleBatch(types, difficulty, seedUsed, requested);
   if (!puzzleList || puzzleList.length === 0) return { error: 'generation_failed' };
 
   const now = Date.now();
@@ -110,7 +138,7 @@ export function submitAnswer({ matchId, playerId, puzzleIndex, answer, msTaken }
   if (mp.status !== 'active') return { error: 'match_closed' };
 
   const idx = Number(puzzleIndex);
-  if (!Number.isInteger(idx) || idx < 0 || idx >= PUZZLES_PER_MATCH) return { error: 'bad_index' };
+  if (!Number.isInteger(idx) || idx < 0) return { error: 'bad_index' };
   const dupe = one('SELECT 1 FROM answers WHERE match_id = ? AND puzzle_index = ?', [matchId, idx]);
   if (dupe) return { error: 'already_answered' };
 
@@ -152,6 +180,57 @@ export function submitAnswer({ matchId, playerId, puzzleIndex, answer, msTaken }
 }
 
 // Finish a match: compute official score, XP, rating, achievements.
+// Reveal one INCORRECT option to eliminate on the current puzzle. Never
+// reveals the answer. Costs diamonds (server-validated), max 1 per puzzle.
+export function hintPuzzle({ matchId, playerId, puzzleIndex }) {
+  const entry = takeKey(matchId);
+  if (!entry) return { error: 'match_not_found_or_expired' };
+  const mp = one('SELECT * FROM match_players WHERE match_id = ? AND player_id = ?', [matchId, playerId]);
+  if (!mp) return { error: 'not_your_match' };
+  if (mp.status !== 'active') return { error: 'match_closed' };
+  const idx = Number(puzzleIndex);
+  if (!Number.isInteger(idx) || idx < 0 || idx >= entry.puzzles.length) return { error: 'bad_index' };
+  const dup = one('SELECT 1 FROM answers WHERE match_id = ? AND puzzle_index = ?', [matchId, idx]);
+  if (dup) return { error: 'already_answered' };
+  const used = entry.hints.get(idx) ?? 0;
+  if (used >= HINT_LIMIT_PER_PUZZLE) return { error: 'hint_limit_reached' };
+
+  const puzzle = entry.puzzles[idx];
+  const eliminate = pickElimination(puzzle, entry, idx);
+  const now = Date.now();
+  const out = transaction(() => {
+    const p = one('SELECT diamonds FROM players WHERE player_id = ?', [playerId]);
+    if (!p) return { error: 'no_player' };
+    if (p.diamonds < DIAMONDS.hint) return { error: 'insufficient_diamonds' };
+    q('UPDATE players SET diamonds = diamonds - ? WHERE player_id = ? AND diamonds >= ?', [DIAMONDS.hint, playerId, DIAMONDS.hint]);
+    q('INSERT INTO hints (match_id, player_id, puzzle_index, eliminated, created_at) VALUES (?, ?, ?, ?, ?)', [matchId, playerId, idx, String(eliminate).slice(0, 64), now]);
+    entry.hints.set(idx, used + 1);
+    return { ok: true, eliminate, cost: DIAMONDS.hint, diamondsLeft: p.diamonds - DIAMONDS.hint };
+  });
+  if (out.ok) logAudit(playerId, 'hint_used', { matchId, idx, cost: DIAMONDS.hint });
+  return out;
+}
+
+// Deterministically choose an incorrect option to eliminate (never the answer).
+function pickElimination(puzzle, entry, idx) {
+  const correct = String(puzzle.correct);
+  const ids = puzzle.options.map((o) => String(typeof o === 'object' && o !== null ? o.id : o));
+  const wrong = ids.filter((id) => id !== correct);
+  if (!wrong.length) return null;
+  wrong.sort();
+  const slot = (entry.hints.get(idx) ?? 0) % wrong.length;
+  return wrong[slot];
+}
+
+export function puzzlesRemaining({ matchId, playerId }) {
+  const entry = takeKey(matchId);
+  if (!entry) return null;
+  const mp = one('SELECT status, started_at FROM match_players WHERE match_id = ? AND player_id = ?', [matchId, playerId]);
+  if (!mp || mp.status !== 'active') return null;
+  const answered = one('SELECT COUNT(*) AS n FROM answers WHERE match_id = ?', [matchId]).n;
+  return { remaining: Math.max(0, entry.puzzles.length - answered) };
+}
+
 export function finishMatch({ matchId, playerId }) {
   const entry = takeKey(matchId);
   if (!entry) return { error: 'match_not_found_or_expired' };
@@ -195,10 +274,13 @@ export function finishMatch({ matchId, playerId }) {
       `UPDATE match_players SET status='completed', finished_at=?, score=?, correct_count=?, total_count=?, elapsed_ms=?, xp_awarded=?, rating_before=?, rating_after=? WHERE match_id=? AND player_id=?`,
       [now, score, correctCount, totalCount, elapsed, xp, ratingBefore, ratingAfter, matchId, playerId],
     );
-    q('UPDATE players SET xp = xp + ?, rating = ?, total_correct = total_correct + ?, total_answered = total_answered + ?, last_active_at = ? WHERE player_id = ?', [xp, ratingAfter, correctCount, totalCount, now, playerId]);
+    q('UPDATE players SET xp = xp + ?, rating = ?, total_correct = total_correct + ?, total_answered = total_answered + ?, last_active_at = ?, diamonds = diamonds + ? WHERE player_id = ?', [xp, ratingAfter, correctCount, totalCount, now, earnedDiamonds(correctCount, totalCount), playerId]);
     if (mp.mode === 'daily') {
       q('UPDATE players SET dailies_done = dailies_done + 1 WHERE player_id = ?', [playerId]);
       q("UPDATE daily_usage SET status = 'completed' WHERE match_id = ? AND player_id = ?", [matchId, playerId]);
+    }
+    if (mp.mode === 'tournament') {
+      q("UPDATE tournament_entries SET status = 'completed' WHERE match_id = ? AND player_id = ?", [matchId, playerId]);
     }
 
     // aggregate per-type stats
@@ -247,6 +329,7 @@ export function finishMatch({ matchId, playerId }) {
       totalCount,
       elapsedMs: elapsed,
       xpAwarded: xp,
+      diamondsAwarded: earnedDiamonds(correctCount, totalCount),
       ratingBefore,
       ratingAfter,
       newLevel: levelProgress((player.xp ?? 0) + xp).level,
@@ -283,6 +366,69 @@ function computeStreak(puzzles, byIndex) {
     }
   }
   return best;
+}
+
+// ── Diamonds economy (server-side only; client never sends a balance) ─────
+export const DIAMONDS = { perCorrect: 2, perfectBonus: 10, hint: 5, skip: 15, dailyLogin: 5, adReward: 5, tournamentEntry: 25, referralBonus: 20 };
+
+export function earnedDiamonds(correctCount, totalCount) {
+  if (!totalCount) return 0;
+  return correctCount * DIAMONDS.perCorrect + (correctCount === totalCount ? DIAMONDS.perfectBonus : 0);
+}
+
+// Skip the current puzzle: scored as incorrect, costs diamonds. One per match.
+// The answer key entry keeps the authoritative skip/hint state per puzzle.
+export function skipPuzzle({ matchId, playerId, puzzleIndex }) {
+  const entry = takeKey(matchId);
+  if (!entry) return { error: 'match_not_found_or_expired' };
+  const mp = one('SELECT * FROM match_players WHERE match_id = ? AND player_id = ?', [matchId, playerId]);
+  if (!mp) return { error: 'not_your_match' };
+  if (mp.status !== 'active') return { error: 'match_closed' };
+  const idx = Number(puzzleIndex);
+  if (!Number.isInteger(idx) || idx < 0 || idx >= entry.puzzles.length) return { error: 'bad_index' };
+  const dup = one('SELECT 1 FROM answers WHERE match_id = ? AND puzzle_index = ?', [matchId, idx]);
+  if (dup) return { error: 'already_answered' };
+  if (entry.usedSkips >= SKIP_LIMIT) return { error: 'skip_limit_reached' };
+
+  const puzzle = entry.puzzles[idx];
+  const now = Date.now();
+  const out = transaction(() => {
+    const p = one('SELECT diamonds FROM players WHERE player_id = ?', [playerId]);
+    if (!p) return { error: 'no_player' };
+    if (p.diamonds < DIAMONDS.skip) return { error: 'insufficient_diamonds' };
+    q('UPDATE players SET diamonds = diamonds - ? WHERE player_id = ? AND diamonds >= ?', [DIAMONDS.skip, playerId, DIAMONDS.skip]);
+    q(
+      `INSERT INTO answers (match_id, player_id, puzzle_index, puzzle_id, submitted, is_correct, ms_taken, answered_at)
+       VALUES (?, ?, ?, ?, 'skipped', 0, 0, ?)`,
+      [matchId, playerId, idx, puzzle.puzzleId, now],
+    );
+    const existing = one('SELECT * FROM match_types WHERE match_id = ? AND puzzle_type = ?', [matchId, puzzle.type]);
+    if (existing) {
+      q('UPDATE match_types SET total = total + ? WHERE match_id = ? AND puzzle_type = ?', [1, matchId]);
+    } else {
+      q('INSERT INTO match_types (match_id, puzzle_type, correct, total, ms_total) VALUES (?, ?, 0, 1, 0)', [matchId, puzzle.type]);
+    }
+    entry.usedSkips++;
+    return { ok: true, cost: DIAMONDS.skip, diamondsLeft: p.diamonds - DIAMONDS.skip };
+  });
+  if (out.ok) logAudit(playerId, 'skip_puzzle', { matchId, idx, cost: DIAMONDS.skip });
+  return out;
+}
+
+// Daily login bonus: +5 diamonds once per calendar day (server-side guard
+// against double-claiming via the players.last_login_bonus_at column).
+export function awardDailyLoginBonus(playerId) {
+  const today = new Date().toISOString().slice(0, 10);
+  const out = transaction(() => {
+    const p = one('SELECT last_login_bonus_at FROM players WHERE player_id = ?', [playerId]);
+    if (!p) return { ok: false };
+    if (p.last_login_bonus_at === today) return { ok: false, reason: 'already_claimed' };
+    q('UPDATE players SET diamonds = diamonds + ?, last_login_bonus_at = ? WHERE player_id = ?', [DIAMONDS.dailyLogin, today, playerId]);
+    q('INSERT INTO economy_log (at, player_id, kind, amount, day) VALUES (?, ?, ?, ?, ?)', [Date.now(), playerId, 'login_bonus', DIAMONDS.dailyLogin, today]);
+    return { ok: true, amount: DIAMONDS.dailyLogin };
+  });
+  if (out.ok) logAudit(playerId, 'login_bonus', { amount: DIAMONDS.dailyLogin });
+  return out;
 }
 
 // Abandon: mark closed without scoring (used on explicit exit)

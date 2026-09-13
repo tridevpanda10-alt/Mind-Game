@@ -18,6 +18,7 @@ Optional configuration via `.env` (see `.env.example`):
 | `PORT`               | HTTP port (default 3000)                              |
 | `DB_PATH`            | SQLite file location (default `data/arena.db`)        |
 | `DAILY_SEED_SECRET`  | Shared secret mixed into daily challenge seeds        |
+| `TOURNAMENT_SEED_SECRET` | Shared secret mixed into weekly tournament seeds   |
 | `RATE_API/RATE_AUTH/RATE_SUBMIT` | Rate-limit overrides (testing)           |
 | `NODE_ENV`           | `production` enables 1h static asset caching          |
 
@@ -48,10 +49,66 @@ UI (vanilla ES modules)  →  Game state (screens/*)  →  Puzzle engine
 
 ## Game modes
 
-- **Training** — pick any of 9 reasoning types × 6 difficulties, no rating risk.
-- **Quick Match / Ranked** — 5 mixed puzzles; server-computed score and rating.
-- **Daily Challenge** — identical deterministic puzzle set for all players each
-  day, one official attempt, global daily leaderboard.
+- **Training** — pick any of 9 reasoning types × 6 difficulties and a session
+  length (5–30 puzzles, default 10). No rating risk. No diamonds earned or
+  spent.
+- **Quick Match / Ranked** — 12 mixed puzzles; server-computed score and
+  rating.
+- **Daily Challenge** — identical deterministic puzzle set (5–7 puzzles, kept
+  short on purpose) for all players each day, one official attempt, global
+  daily leaderboard.
+- **Weekly Tournament** — one entry per player per week, entry costs 25 💎
+  (diamonds only — never cash). Same seeded puzzle set for everyone that
+  week. Top 3 share the prize pool (50/30/15 💎 plus a 100 💎 house base);
+  payouts settle server-side the next time standings are viewed.
+
+## Case Files theme
+
+The game ships with the "Case Files" detective theme: matches are cases,
+puzzles are clues, and each match opens with a case briefing and closes with
+a verdict (Case Solved / Reopened / Unsolved). All flavor strings live in
+`src/public/js/theme.js` as one pluggable config object — a future theme
+(space mission, treasure hunt) swaps in by replacing that object.
+
+## Diamonds (virtual currency — never cashable)
+
+Diamonds exist only inside the game and have no cash value. Every balance
+change is computed and validated server-side; the client never sends a
+balance.
+
+- **Earn:** +2 per correct answer, +10 perfect-match bonus, +5 daily login
+  bonus (once per calendar day, auto-claimed), +5 per watched rewarded ad
+  (max 5/day), +20 referral bonus when an invited friend finishes their first
+  match.
+- **Spend:** 5 💎 hint (eliminates one wrong option, max 1 per puzzle),
+  15 💎 skip (one per match, scored as incorrect), 25 💎 tournament entry.
+- **Ledger:** every mutation is written to an `economy_log` table for audit
+  and daily-quota enforcement.
+
+## Ads (currently mocked)
+
+`src/public/js/ads.js` exposes `showInterstitialAd()` and `showRewardedAd()`
+as placeholder overlays — **no real ad network is connected yet** and no
+external API key is required. The rewarded flow calls the server's
+`POST /api/ad-reward`, which grants +5 💎 rate-limited to 5 per player per
+day. The `TODO: swap for real ad SDK (AdSense/AdMob)` markers show the only
+two integration points a real SDK would replace.
+
+## Referrals / affiliate
+
+Every registered player gets a shareable invite link
+(`https://<domain>/?ref=<code>`, copy button on Home). The referrer earns
++20 💎 **only after** the invited player finishes their first match — not at
+signup — to discourage fake-account farming. An `<!-- AFFILIATE_SLOT -->`
+placeholder is reserved in the home markup for a future approved affiliate
+partner; none is integrated.
+
+## Installable app (PWA)
+
+`manifest.json` + a minimal service worker make the game installable via
+"Add to Home Screen" with its own icon and full-screen standalone display.
+The service worker caches only the static app shell; all API/match/score
+requests stay network-only.
 
 ## Testing
 
@@ -78,10 +135,17 @@ identical challenges only when they share `DAILY_SEED_SECRET`.
 All visuals are original CSS and inline SVG; system font stack. No
 third-party copyrighted assets are used.
 
-## Known limitations (by design, for this phase)
+## Known limitations (by design, at this phase)
 
+- **Ads are mocked.** The interstitial and rewarded-ad flows are local
+  placeholders; a real network (AdSense/AdMob) still needs account setup and
+  the two marked integration points swapped.
+- **Diamonds are not cashable** and there is no payment integration —
+  deliberately. Tournament entry and all prizes are diamonds only.
 - Single-process answer keys (in-memory, TTL-bounded) — move to the DB for
-  multi-instance deployments.
+  multi-instance deployments. Tournament prize settlement is lazy (computed
+  on leaderboard read) rather than a background cron.
 - Ranked rating uses a fixed opponent pool (1000); seasonal/ELO matchmaking
   is intentionally deferred until core stability is proven.
-- Five-tester validation program is the next milestone.
+- Ad-reward rate limiting is per-player per-day via the economy ledger, not
+  per-IP; a real ad SDK would bring its own fraud controls.

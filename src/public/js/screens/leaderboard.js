@@ -1,4 +1,4 @@
-// Leaderboard: daily / rating / xp tabs, server-paginated.
+// Leaderboard: daily / tournament / rating / xp tabs, server-paginated.
 
 import { api } from '../api.js';
 import { $, $$, el, showScreen } from '../ui.js';
@@ -23,6 +23,20 @@ export async function goLeaderboard(board) {
         displayName: e.displayName,
         stat: `${e.score} pts · ${e.correct}/${e.total} · ${Math.round(e.elapsedMs / 1000)}s`,
       })), 'No daily results yet today. Be the first to play the Daily Challenge!');
+    } else if (currentBoard === 'tournament') {
+      const out = await api('GET', '/api/leaderboard/tournament');
+      const payoutByPos = new Map((out.payouts ?? []).map((p) => [p.position, p.diamonds]));
+      const head = el('p', { class: 'sub', text: `Week of ${out.week} · prize pool ${out.prizePool} 💎 · payouts: ${out.payouts.map((p) => `#${p.position} ${p.diamonds}💎`).join(' · ')}` });
+      const bodyEl = $('#lbBody');
+      bodyEl.replaceChildren(head);
+      const rows = out.entries.map((e) => ({
+        position: e.position,
+        displayName: e.displayName,
+        stat: `${e.score} pts · ${e.correct}/${e.total}${payoutByPos.has(e.position) ? ` · won ${payoutByPos.get(e.position)} 💎` : ''}`,
+      }));
+      bodyEl.append(el('div', { class: 'lb' }));
+      renderRows(rows, 'No tournament entries settled yet this week. Entry costs 25 💎 — top 3 share the pool!');
+      return;
     } else {
       const out = await api('GET', `/api/leaderboard?board=${currentBoard}`);
       renderRows(out.entries.map((e) => ({

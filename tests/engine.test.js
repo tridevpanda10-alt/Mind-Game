@@ -2,9 +2,10 @@
 // (>=30 validated puzzles across all types and difficulties).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makePuzzle, makePuzzleBatch, validatePuzzle, recheckUniqueness, PUZZLE_TYPES, DIFFICULTIES, estimateSeconds } from '../src/server/puzzles/engine.js';
+import { makePuzzle, makePuzzleBatch, validatePuzzle, recheckUniqueness, PUZZLE_TYPES, DIFFICULTIES, estimateSeconds, puzzleSignature } from '../src/server/puzzles/engine.js';
 import { makeRng, seedFromString } from '../src/server/puzzles/rng.js';
 import { scoreGuess } from '../src/server/puzzles/types/mastermind.js';
+import { PUZZLES_PER_MODE, PUZZLES_PER_MATCH, puzzlesForMode, dailyCount, buildDailyTypes } from '../src/server/matchService.js';
 
 test('seeded RNG is deterministic', () => {
   const a = makeRng(12345);
@@ -87,4 +88,45 @@ test('mastermind scoreGuess is correct', () => {
   assert.deepEqual(scoreGuess(['R', 'G', 'B'], ['R', 'B', 'G']), { exact: 1, partial: 2 });
   assert.deepEqual(scoreGuess(['R', 'R', 'G'], ['R', 'R', 'R']), { exact: 2, partial: 0 });
   assert.deepEqual(scoreGuess(['R', 'G', 'B'], ['G', 'R', 'Y']), { exact: 0, partial: 2 });
+});
+
+// ── Phase 1: per-mode pacing ──────────────────────────────────────────────
+test('per-mode puzzle counts: quick 12, daily 5-7, training default 10 max 30', () => {
+  assert.equal(PUZZLES_PER_MODE.quick, 12);
+  assert.equal(PUZZLES_PER_MODE.daily, dailyCount());
+  assert.ok(PUZZLES_PER_MODE.daily >= 5 && PUZZLES_PER_MODE.daily <= 7, `daily count ${PUZZLES_PER_MODE.daily} must be 5-7`);
+  assert.equal(PUZZLES_PER_MODE.training, 10);
+  assert.equal(puzzlesForMode('quick'), 12);
+  assert.equal(PUZZLES_PER_MATCH, 12, 'back-compat alias tracks quick');
+});
+
+test('quick batches return 12 unique validated puzzles', () => {
+  const allTypes = ['pattern', 'sequence', 'matrix', 'deduction', 'conditional', 'number', 'operator', 'spatial', 'mastermind'];
+  const batch = makePuzzleBatch(allTypes, 'medium', 20260914, PUZZLES_PER_MODE.quick);
+  assert.equal(batch.length, 12);
+  const sigs = new Set(batch.map(puzzleSignature));
+  assert.equal(sigs.size, 12, 'no identical puzzle twice in one match');
+  for (const p of batch) assert.equal(validatePuzzle(p), null);
+});
+
+test('daily batches stay short and unique for the day type mix', () => {
+  const day = '2026-09-14';
+  const types = buildDailyTypes(day);
+  const batch = makePuzzleBatch(types, 'medium', seedFromString('seed:' + day), PUZZLES_PER_MODE.daily);
+  assert.ok(batch.length >= 5 && batch.length <= 7);
+  const sigs = new Set(batch.map(puzzleSignature));
+  assert.equal(sigs.size, batch.length, 'daily puzzles must be unique');
+});
+
+test('batch uniqueness holds even with a single narrow type', () => {
+  const batch = makePuzzleBatch(['operator'], 'easy', 424242, 12);
+  assert.equal(batch.length, 12);
+  assert.equal(new Set(batch.map(puzzleSignature)).size, 12, 'same type 12x must still be 12 distinct puzzles');
+});
+
+test('same seed still reproduces the same batch (determinism preserved)', () => {
+  const types = ['sequence', 'matrix', 'deduction', 'number', 'operator'];
+  const a = makePuzzleBatch(types, 'medium', 424242, 6);
+  const b = makePuzzleBatch(types, 'medium', 424242, 6);
+  assert.deepEqual(a.map((p) => p.puzzleId), b.map((p) => p.puzzleId));
 });

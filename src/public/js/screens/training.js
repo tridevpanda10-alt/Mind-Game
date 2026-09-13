@@ -18,8 +18,23 @@ const DIFFS = ['rookie', 'easy', 'medium', 'hard', 'expert', 'master'];
 
 const selectedTypes = new Set(['sequence', 'deduction', 'operator']);
 let selectedDiff = 'medium';
+let selectedCount = 10;
+const COUNTS = [5, 10, 15, 20, 30];
 
 export function initTraining() {
+  const crow = $('#countRow');
+  crow.replaceChildren();
+  for (const c of COUNTS) {
+    crow.append(el('button', {
+      class: `diff-btn${c === selectedCount ? ' active' : ''}`,
+      type: 'button',
+      onclick: () => {
+        selectedCount = c;
+        $$('#countRow .diff-btn').forEach((b) => b.classList.toggle('active', Number(b.textContent) === c));
+      },
+      text: String(c),
+    }));
+  }
   const grid = $('#typeGrid');
   grid.replaceChildren();
   for (const [id, label] of TYPES) {
@@ -50,7 +65,7 @@ export function initTraining() {
     }));
   }
   $('#startTraining').addEventListener('click', () => {
-    startMatch('training', { body: { types: [...selectedTypes], difficulty: selectedDiff } });
+    startMatch('training', { body: { types: [...selectedTypes], difficulty: selectedDiff, count: selectedCount } });
   });
 }
 

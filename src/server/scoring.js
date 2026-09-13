@@ -3,7 +3,7 @@
 // challenges) are enforced where these functions are called, not here —
 // this module stays pure and unit-testable.
 
-export const MODES = { TRAINING: 'training', QUICK: 'quick', DAILY: 'daily' };
+export const MODES = { TRAINING: 'training', QUICK: 'quick', DAILY: 'daily', TOURNAMENT: 'tournament' };
 
 export const XP_PER_LEVEL = 500;
 export function levelForXp(xp) {

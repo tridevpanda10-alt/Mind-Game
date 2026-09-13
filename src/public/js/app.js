@@ -1,6 +1,6 @@
-// App entry point: boot, splash, auth, navigation wiring.
+// App entry point: boot, splash, auth, navigation wiring, PWA registration.
 
-import { api, setToken, getToken } from './api.js';
+import { api, setToken, getToken, captureReferralFromUrl, getStoredReferral, clearStoredReferral } from './api.js';
 import { $, $$, el, showScreen, toast, spinner } from './ui.js';
 import { initGame, exitMatch, getState } from './screens/game.js';
 import { initHome, goHome } from './screens/home.js';
@@ -18,7 +18,7 @@ function playSplash(onDone) {
     s.style.animationDelay = `${i * 1.05}s`;
     seq.append(s);
   });
-  const logo = el('div', { class: 'splash-logo', text: 'COMPETITIVE REASONING ARENA' });
+  const logo = el('div', { class: 'splash-logo', text: 'MIND GAME — REASONING ARENA' });
   logo.style.animationDelay = '3.2s';
   seq.append(logo);
   const enter = el('button', { class: 'btn primary splash-enter', text: 'ENTER THE ARENA' });
@@ -26,6 +26,13 @@ function playSplash(onDone) {
   enter.addEventListener('click', onDone);
   seq.append(enter);
   // auto-advance for reduced-motion users is handled by CSS near-instant animations
+}
+
+// ── service worker (PWA app shell only; API calls stay network-only) ──────
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
+  navigator.serviceWorker.register('/sw.js').catch(() => { /* offline shell is optional */ });
 }
 
 // ── auth screen ───────────────────────────────────────────────────────────
@@ -45,6 +52,7 @@ function setAuthMode(mode) {
 }
 
 function initAuth() {
+  captureReferralFromUrl(); // remember ?ref=CODE before it disappears
   $$('.tab[data-auth-tab]').forEach((t) => t.addEventListener('click', () => setAuthMode(t.dataset.authTab)));
   $('#authForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -55,9 +63,12 @@ function initAuth() {
     const name = $('#authName').value.trim();
     spinner(true);
     try {
-      const out = authMode === 'login'
-        ? await api('POST', '/api/auth/login', { email, password: pass })
-        : await api('POST', '/api/auth/register', { email, password: pass, displayName: name });
+      const ref = getStoredReferral();
+      const payload = authMode === 'login'
+        ? { email, password: pass }
+        : { email, password: pass, displayName: name, ...(ref ? { ref } : {}) };
+      const out = await api('POST', authMode === 'login' ? '/api/auth/login' : '/api/auth/register', payload);
+      if (authMode === 'register') clearStoredReferral();
       setToken(out.token);
       enterApp();
     } catch (err) {
@@ -103,13 +114,23 @@ function restoreMatch() {
   // A refresh mid-match: the server still holds the key; the client can't
   // rebuild question data (answers are never sent twice), so route home.
   sessionStorage.removeItem('cra_match');
+  void getState();
 }
 
 async function enterApp() {
   $('#screen-auth').classList.add('hidden');
   $('#screen-splash').classList.add('hidden');
   $('#shell').classList.remove('hidden');
+  claimDailyLoginBonus();
   await goHome();
+}
+
+// Auto-claim the +5 diamonds daily login bonus (server decides once/day).
+async function claimDailyLoginBonus() {
+  try {
+    const out = await api('POST', '/api/bonus/daily');
+    if (out.ok) toast(`Daily bonus: +${out.amount} 💎`);
+  } catch { /* bonus is best-effort */ }
 }
 
 async function boot() {
@@ -120,6 +141,7 @@ async function boot() {
   initLeaderboard();
   initGame({});
   restoreMatch();
+  registerServiceWorker();
 
   const hasToken = Boolean(getToken());
   playSplash(() => {
