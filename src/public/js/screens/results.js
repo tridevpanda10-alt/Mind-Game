@@ -22,6 +22,7 @@ export function showResults(out, mode) {
 
   const hero = el('div', { class: 'card' },
     el('p', { class: `case-verdict ${verdictClass}`, text: verdict }),
+    el('p', { class: 'sub', text: theme.screens.results.summaryLine(out.correctCount, out.totalCount) }),
     el('div', { class: 'score-hero' },
       cell('Score', String(out.score), true),
       cell('Accuracy', pct(acc)),

@@ -48,7 +48,7 @@ function stopTimer() {
 // Show the themed case briefing before the first clue of a match.
 function showIntro(mode, beginFn) {
   const t = matchTheme(mode);
-  $('#introKind').textContent = mode === 'training' ? 'Field Exercise' : mode === 'daily' ? 'Daily Case' : mode === 'tournament' ? 'Weekly Case' : 'Ranked Case';
+  $('#introKind').textContent = theme.match.modeLabel[mode] ?? 'Case';
   $('#introTitle').textContent = t.title;
   $('#introFlavor').textContent = t.flavor;
   $('#introMeta').textContent = state.puzzles.length
@@ -109,7 +109,7 @@ export async function startMatch(mode, opts = {}) {
 function renderPuzzle() {
   const p = state.puzzles[state.index];
   const t = matchTheme(state.mode);
-  $('#gameMode').textContent = state.mode === 'daily' ? 'Daily' : state.mode === 'quick' ? 'Quick Match' : state.mode === 'tournament' ? 'Tournament' : 'Training';
+  $('#gameMode').textContent = theme.match.modeLabel[state.mode] ?? 'Case';
   // Reuse the existing index/length progress state; theme supplies the wording.
   $('#gameProgress').textContent = theme.screens.game.progress(state.index + 1, state.puzzles.length);
   $('#gameType').textContent = typeLabel(p.type);

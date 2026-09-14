@@ -3,18 +3,39 @@
 
 import { api, getDiamonds, setDiamonds, referralLink } from '../api.js';
 import { $, showScreen, toast, pct } from '../ui.js';
+import { theme } from '../theme.js';
 import { startMatch } from './game.js';
 
 let dailyAvailable = null;
 
+// Card titles/bodies come from the theme module — index.html keeps only ids
+// and neutral fallback text for no-JS.
+function applyThemeLabels() {
+  const h = theme.home;
+  $('#dailyTitle').textContent = h.dailyTitle;
+  $('#dailyDesc').textContent = h.dailyBody;
+  $('#tournamentTitle').textContent = h.tournamentTitle;
+  $('#tournamentDesc').textContent = h.tournamentBody();
+  $('#quickTitle').textContent = h.quickMatchTitle;
+  $('#quickDesc').textContent = h.quickMatchBody;
+  $('#rankedTitle').textContent = h.rankedTitle;
+  $('#rankedDesc').textContent = h.rankedBody;
+  $('#trainingTitle').textContent = h.trainingTitle;
+  $('#trainingDesc').textContent = h.trainingBody;
+}
+
 export async function goHome() {
   showScreen('#screen-home');
+  applyThemeLabels();
   try {
     const [me, daily] = await Promise.all([
       api('GET', '/api/me'),
       api('GET', '/api/daily/status'),
     ]);
-    $('#greeting').textContent = `Welcome back, ${me.displayName}`;
+    // Theme supplies the greeting so the persona is swappable (detective etc.).
+    $('#greeting').textContent = me.isGuest
+      ? theme.home.welcomeBackGuest(me.displayName)
+      : theme.home.welcomeBack(me.displayName);
     $('#homeSub').textContent = me.isGuest
       ? 'Guest mode — training only. Register to climb the ranks.'
       : `Level ${me.level} · ${me.rating} rating`;
