@@ -85,14 +85,18 @@ balance.
 - **Ledger:** every mutation is written to an `economy_log` table for audit
   and daily-quota enforcement.
 
-## Ads (currently mocked)
+## Ads (provider abstraction; currently mocked)
 
 `src/public/js/ads.js` exposes `showInterstitialAd()` and `showRewardedAd()`
-as placeholder overlays — **no real ad network is connected yet** and no
-external API key is required. The rewarded flow calls the server's
-`POST /api/ad-reward`, which grants +5 💎 rate-limited to 5 per player per
-day. The `TODO: swap for real ad SDK (AdSense/AdMob)` markers show the only
-two integration points a real SDK would replace.
+and dispatches to a **pluggable provider**: `js/ads/mock.js` (placeholder
+overlays, the default) or `js/ads/google-h5.js` (Google H5 Games Ads /
+Ad Placement API adapter, wired but inert until AdSense env config exists).
+The server picks the provider via `GET /api/config` (`ADS_PROVIDER`,
+`ADS_CLIENT` env); `?ads=mock|google-h5|off` overrides per session. The
+rewarded flow calls `POST /api/ad-reward`, which grants +5 💎 rate-limited to
+5 per player per day and **fails closed** for real providers until the
+server-side verification hook (`TODO(ad-ssv)` in `verifyReward()`) is
+implemented. See **docs/ads-integration.md** for the full go-live plan.
 
 ## Referrals / affiliate
 
@@ -137,9 +141,10 @@ third-party copyrighted assets are used.
 
 ## Known limitations (by design, at this phase)
 
-- **Ads are mocked.** The interstitial and rewarded-ad flows are local
-  placeholders; a real network (AdSense/AdMob) still needs account setup and
-  the two marked integration points swapped.
+- **Ads remain a mock by default.** The provider abstraction and a Google
+  H5 adapter ship, but no network is connected (no account/approval); server-
+  side reward verification (`TODO(ad-ssv)`) is still a stub. See
+  docs/ads-integration.md.
 - **Diamonds are not cashable** and there is no payment integration —
   deliberately. Tournament entry and all prizes are diamonds only.
 - Single-process answer keys (in-memory, TTL-bounded) — move to the DB for

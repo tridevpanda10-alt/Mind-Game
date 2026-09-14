@@ -1,6 +1,7 @@
 // App entry point: boot, splash, auth, navigation wiring, PWA registration.
 
 import { api, setToken, getToken, captureReferralFromUrl, getStoredReferral, clearStoredReferral } from './api.js';
+import { initAds } from './ads.js';
 import { $, $$, el, showScreen, toast, spinner } from './ui.js';
 import { initGame, exitMatch, getState } from './screens/game.js';
 import { initHome, goHome } from './screens/home.js';
@@ -142,6 +143,7 @@ async function boot() {
   initGame({});
   restoreMatch();
   registerServiceWorker();
+  initAds(); // warm the ad provider (server-chosen); lazy-fallback otherwise
 
   const hasToken = Boolean(getToken());
   playSplash(() => {

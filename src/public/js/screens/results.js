@@ -66,19 +66,19 @@ export function showResults(out, mode) {
 
   showScreen('#screen-results');
 
-  // Placeholder rewarded ad: earn 5 diamonds instead of a paid hint shortcut.
-  // TODO: swap for real ad SDK (AdSense/AdMob) here — the flow stays identical.
+  // Rewarded ad: earn 5 diamonds. The provider (mock or a real network) is
+  // chosen by the server via /api/config — this flow is network-agnostic.
   const rewardedBtn = el('button', { class: 'btn', id: 'adRewardBtn', text: 'Watch Ad for +5 💎' });
   rewardedBtn.addEventListener('click', async () => {
     rewardedBtn.disabled = true;
-    const { showRewardedAd } = await import('../ads.js');
+    const { showRewardedAd, getActiveProviderId } = await import('../ads.js');
     const watched = await showRewardedAd();
     if (!watched) {
       rewardedBtn.disabled = false;
       return;
     }
     try {
-      const reward = await api('POST', '/api/ad-reward', {});
+      const reward = await api('POST', '/api/ad-reward', { provider: getActiveProviderId() });
       setDiamonds(reward.diamonds);
       const line = el('p', { class: 'sub good-text', text: `+${reward.amount} 💎 credited (${reward.remainingToday} ad rewards left today).` });
       rewardedBtn.replaceWith(line);
@@ -90,7 +90,7 @@ export function showResults(out, mode) {
   });
   extras.append(rewardedBtn);
 
-  // Placeholder interstitial after the score is visible; non-blocking.
+  // Interstitial after the score is visible; non-blocking.
   import('../ads.js').then(({ showInterstitialAd }) => showInterstitialAd());
 }
 

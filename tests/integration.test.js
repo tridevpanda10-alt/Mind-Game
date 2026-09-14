@@ -56,7 +56,7 @@ async function playFullMatch(token, mode, opts = {}) {
 before(async () => {
   dir = mkdtempSync(join(tmpdir(), 'arena-test-'));
   child = spawn(process.execPath, ['src/server/index.js'], {
-    env: { ...process.env, PORT: String(PORT), DB_PATH: join(dir, 'test.db'), RATE_AUTH: '200', RATE_SUBMIT: '1000', RATE_API: '5000' },
+    env: { ...process.env, PORT: String(PORT), DB_PATH: join(dir, 'test.db'), RATE_AUTH: '200', RATE_SUBMIT: '1000', RATE_API: '5000', ADS_PROVIDER: 'mock', ADS_REWARD_SECRET: '' },
     stdio: ['ignore', 'ignore', 'inherit'], // surface server errors during development
   });
   for (let i = 0; i < 40; i++) {
@@ -366,17 +366,35 @@ test('client cannot set its own diamond balance', async () => {
 
 test('ad reward grants 5 diamonds and is rate-limited to 5/day', async () => {
   const p = await newPlayer();
-  const first = await api('POST', '/api/ad-reward', { token: p.token, body: {} });
+  const first = await api('POST', '/api/ad-reward', { token: p.token, body: { provider: 'mock' } });
   assert.equal(first.status, 200);
   assert.equal(first.json.amount, 5);
   for (let i = 0; i < 4; i++) {
-    const r = await api('POST', '/api/ad-reward', { token: p.token, body: {} });
+    const r = await api('POST', '/api/ad-reward', { token: p.token, body: { provider: 'mock' } });
     assert.equal(r.status, 200);
   }
-  const sixth = await api('POST', '/api/ad-reward', { token: p.token, body: {} });
+  const sixth = await api('POST', '/api/ad-reward', { token: p.token, body: { provider: 'mock' } });
   assert.equal(sixth.status, 429);
   const wallet = await api('GET', '/api/wallet', { token: p.token });
   assert.equal(wallet.json.diamonds, 25, '5 rewards × 5 diamonds, nothing more');
+});
+
+test('ads config endpoint exposes provider selection only', async () => {
+  const cfg = await api('GET', '/api/config');
+  assert.equal(cfg.status, 200);
+  assert.ok(['mock', 'google-h5', 'off'].includes(cfg.json.ads.provider), 'provider from allowlist');
+  assert.equal(cfg.json.ads.adClient, null, 'no publisher id leaks in mock/off mode');
+});
+
+test('ADV: ad rewards fail closed for unverifiable real providers', async () => {
+  const p = await newPlayer();
+  const r = await api('POST', '/api/ad-reward', { token: p.token, body: { provider: 'google-h5' } });
+  assert.equal(r.status, 403);
+  assert.equal(r.json.error, 'ad_reward_unverified');
+  const wallet = await api('GET', '/api/wallet', { token: p.token });
+  assert.equal(wallet.json.diamonds, 0, 'no diamonds minted without verification');
+  const bad = await api('POST', '/api/ad-reward', { token: p.token, body: { provider: 'attacker-net' } });
+  assert.equal(bad.status, 400, 'unknown providers rejected');
 });
 
 test('daily login bonus claims once per day', async () => {
@@ -436,7 +454,7 @@ test('tournament: entry costs 25 diamonds, one per week, rejects when broke', as
 
   const p = await newPlayer();
   // Fund 25+ diamonds via rewarded ads.
-  for (let i = 0; i < 5; i++) await api('POST', '/api/ad-reward', { token: p.token, body: {} });
+  for (let i = 0; i < 5; i++) await api('POST', '/api/ad-reward', { token: p.token, body: { provider: 'mock' } });
   const wallet = await api('GET', '/api/wallet', { token: p.token });
   assert.equal(wallet.json.diamonds, 25);
 

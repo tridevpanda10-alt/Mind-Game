@@ -160,11 +160,11 @@ async function useHint() {
   // Watch an ad to earn the hint when the balance is too low.
   if (getDiamonds() < g.hintCost) {
     toast('Not enough diamonds — watch a short ad instead?');
-    const { showRewardedAd } = await import('../ads.js');
+    const { showRewardedAd, getActiveProviderId } = await import('../ads.js');
     const watched = await showRewardedAd();
     if (!watched) return;
     try {
-      const reward = await api('POST', '/api/ad-reward', {});
+      const reward = await api('POST', '/api/ad-reward', { provider: getActiveProviderId() });
       setDiamonds(reward.diamonds);
       toast(`+${reward.amount} 💎`);
     } catch (err) {

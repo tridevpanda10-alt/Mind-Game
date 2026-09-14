@@ -575,11 +575,48 @@ app.get('/api/leaderboard/daily', requireAuth, (req, res) => {
   res.json({ day, entries: rows.map((r, i) => ({ position: i + 1, displayName: r.display_name, score: r.score, correct: r.correct_count, total: r.total_count, elapsedMs: r.elapsed_ms })) });
 });
 
-// ── AD REWARDS (placeholder ads; server enforces the daily quota) ─────────
-// TODO: swap for real ad SDK (AdSense/AdMob) — until then this endpoint trusts
-// the client's "ad watched" signal for a small, hard-capped diamond reward.
+// ── ADS CONFIG (client reads provider selection from here) ───────────────
+// Single source of truth for which ad provider the client loads. Switching
+// networks is an env change + deploy — never a client release.
+// See docs/ads-integration.md for the go-live checklist.
+const ADS_PROVIDER = ['mock', 'google-h5', 'off'].includes(process.env.ADS_PROVIDER)
+  ? process.env.ADS_PROVIDER
+  : 'mock';
+const ADS_CLIENT = process.env.ADS_CLIENT?.trim() || null;      // e.g. ca-pub-…
+const ADS_REWARD_SECRET = process.env.ADS_REWARD_SECRET?.trim() || null;
+
+app.get('/api/config', (req, res) => {
+  res.json({
+    ads: {
+      provider: ADS_PROVIDER,
+      // Public publisher id — safe to expose (it ships in the ad tag anyway).
+      adClient: ADS_PROVIDER === 'google-h5' ? ADS_CLIENT : null,
+    },
+  });
+});
+
+// ── AD REWARDS (server-enforced quota; provider-verifiable) ───────────────
+// The client's "ad watched" signal is trusted only as far as this quota.
+// VERIFIER (extension point): when a real network is connected, verify the
+// reward server-side before paying — e.g. Google's Server-Side Verification
+// (SSV) callbacks, or a signed receipt from the provider. Wire it by filling
+// verifyReward() below and setting ADS_REWARD_SECRET; until then rewards are
+// capped hard by quota AND disabled for real providers without a verifier.
 const AD_REWARD_DAILY_LIMIT = 5;
-app.post('/api/ad-reward', submitLimiter, requireAuth, (req, res) => {
+
+async function verifyReward({ provider }) {
+  if (provider !== 'google-h5') return true; // mock: nothing to verify
+  // TODO(ad-ssv): confirm the rewarded completion against the ad network
+  // (SSV callback keyed by ADS_REWARD_SECRET, or provider receipt API).
+  return Boolean(ADS_REWARD_SECRET); // fail closed until this is implemented
+}
+
+app.post('/api/ad-reward', submitLimiter, requireAuth, async (req, res) => {
+  const provider = typeof req.body?.provider === 'string' ? req.body.provider.slice(0, 32) : 'mock';
+  if (!['mock', 'google-h5'].includes(provider)) return res.status(400).json({ error: 'bad_provider' });
+  if (!(await verifyReward({ provider }))) {
+    return res.status(403).json({ error: 'ad_reward_unverified', detail: 'Reward verification is not configured for this ad provider.' });
+  }
   const day = todayKey();
   const used = one("SELECT COUNT(*) AS n FROM economy_log WHERE player_id = ? AND kind = 'ad_reward' AND day = ?", [req.session.player_id, day]);
   if (used.n >= AD_REWARD_DAILY_LIMIT) return res.status(429).json({ error: 'ad_reward_limit_reached', detail: `Rewarded ads are limited to ${AD_REWARD_DAILY_LIMIT} per day.` });
@@ -587,7 +624,7 @@ app.post('/api/ad-reward', submitLimiter, requireAuth, (req, res) => {
     q('UPDATE players SET diamonds = diamonds + ? WHERE player_id = ?', [DIAMONDS.adReward, req.session.player_id]);
     q('INSERT INTO economy_log (at, player_id, kind, amount, day) VALUES (?, ?, ?, ?, ?)', [Date.now(), req.session.player_id, 'ad_reward', DIAMONDS.adReward, day]);
   });
-  logAudit(req.session.player_id, 'ad_reward', { amount: DIAMONDS.adReward });
+  logAudit(req.session.player_id, 'ad_reward', { amount: DIAMONDS.adReward, provider });
   res.json({ ok: true, diamonds: diamondsOf(req.session.player_id), amount: DIAMONDS.adReward, remainingToday: AD_REWARD_DAILY_LIMIT - used.n - 1 });
 });
 
