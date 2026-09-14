@@ -139,6 +139,29 @@ identical challenges only when they share `DAILY_SEED_SECRET`.
 All visuals are original CSS and inline SVG; system font stack. No
 third-party copyrighted assets are used.
 
+## Skins, themes, and color scheme
+
+Two independent systems:
+
+- **Color scheme (free, client-only):** dark (default) / light via the ☾/☀
+  toggle in the sidebar or bottom nav. Persists in localStorage
+  (`cra_color_scheme`); works for guests; no server call.
+- **World skins (server-validated ownership):** the story layer — Case Files
+  (detective, free), Deep Space Mission and Treasure Hunt (120 💎 each).
+  `GET /api/skins` returns the catalog + the player's unlocked list;
+  `POST /api/skins/unlock` deducts diamonds atomically and rejects unknown
+  ids, free skins, double unlocks (409), and insufficient balances (402).
+  The active skin is stored locally (`cra_active_skin`) and re-validated
+  against server ownership at boot (stale ids fall back to detective).
+  Purchasing a skin is diamonds only — no cash value, consistent with the
+  rest of the economy.
+
+**Pricing note (Phase E reference):** skins cost 120 💎. If/when real-money
+diamond packs ship, the ladder should include ₹100 → 120 💎 ("one pack = one
+skin unlock", badged as best value), alongside smaller packs (e.g. ₹20 → 20 💎,
+₹50 → 55 💎). No purchase flow exists yet; this note keeps the future pricing
+consistent with the skin economy.
+
 ## Known limitations (by design, at this phase)
 
 - **Ads remain a mock by default.** The provider abstraction and a Google
@@ -146,7 +169,8 @@ third-party copyrighted assets are used.
   side reward verification (`TODO(ad-ssv)`) is still a stub. See
   docs/ads-integration.md.
 - **Diamonds are not cashable** and there is no payment integration —
-  deliberately. Tournament entry and all prizes are diamonds only.
+  deliberately. Tournament entry, skin unlocks, and all prizes are diamonds
+  only (see the pricing note above for the planned pack ladder).
 - Single-process answer keys (in-memory, TTL-bounded) — move to the DB for
   multi-instance deployments. Tournament prize settlement is lazy (computed
   on leaderboard read) rather than a background cron.

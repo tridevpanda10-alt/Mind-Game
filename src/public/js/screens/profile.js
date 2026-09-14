@@ -2,7 +2,7 @@
 
 import { api } from '../api.js';
 import { $, el, showScreen, fmtMs, pct } from '../ui.js';
-import { listThemes, setTheme, getThemeId } from '../theme.js';
+import { getScheme, toggleScheme } from '../theme.js';
 
 const TYPE_NAMES = {
   pattern: 'Pattern', sequence: 'Sequence', matrix: 'Matrix', deduction: 'Deduction',
@@ -32,8 +32,8 @@ export async function goProfile() {
     );
     body.append(overview);
 
-    // settings card: theme picker (swaps labels + palette at runtime)
-    body.append(buildThemeCard());
+    // settings card: color scheme shortcut (skins live in their own store)
+    body.append(buildSchemeCard());
 
     // skills card
     const skills = el('div', { class: 'card' },
@@ -90,24 +90,19 @@ export async function goProfile() {
   }
 }
 
-// Theme picker: one button per registered theme; click swaps the whole UI
-// (labels, flavor text, palette) instantly via the theme module.
-function buildThemeCard() {
-  const card = el('div', { class: 'card' }, el('h3', { text: 'Theme' }));
-  const active = getThemeId();
-  const row = el('div', { class: 'theme-row', role: 'group', 'aria-label': 'UI theme' });
-  for (const t of listThemes()) {
-    row.append(el('button', {
-      class: `diff-btn${t.id === active ? ' active' : ''}`,
-      type: 'button',
-      'data-theme-id': t.id,
-      onclick: (e) => {
-        if (!setTheme(t.id)) return;
-        document.querySelectorAll('.theme-row .diff-btn').forEach((b) =>
-          b.classList.toggle('active', b.dataset.themeId === t.id));
-      },
-    }, `${t.name}`));
-  }
+// Color-scheme shortcut card (skins live in the Skins store).
+function buildSchemeCard() {
+  const card = el('div', { class: 'card' }, el('h3', { text: 'Settings' }));
+  const row = el('div', { class: 'row' });
+  const btn = el('button', {
+    class: 'diff-btn', type: 'button',
+    text: getScheme() === 'light' ? '☀ Light mode (active)' : '☾ Dark mode (active)',
+  });
+  btn.addEventListener('click', () => {
+    toggleScheme();
+    btn.textContent = getScheme() === 'light' ? '☀ Light mode (active)' : '☾ Dark mode (active)';
+  });
+  row.append(btn, el('span', { class: 'sub', text: 'Skins are managed in the Skins store.' }));
   card.append(row);
   return card;
 }

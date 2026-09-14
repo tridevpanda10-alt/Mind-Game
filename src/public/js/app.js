@@ -3,12 +3,13 @@
 import { api, setToken, getToken, captureReferralFromUrl, getStoredReferral, clearStoredReferral } from './api.js';
 import { initAds } from './ads.js';
 import { $, $$, el, showScreen, toast, spinner } from './ui.js';
-import { initTheme, theme } from './theme.js';
+import { initTheme, initScheme, toggleScheme, validateActiveSkin, theme } from './theme.js';
 import { initGame, exitMatch, getState } from './screens/game.js';
 import { initHome, goHome } from './screens/home.js';
 import { initTraining, goTraining } from './screens/training.js';
 import { initLeaderboard, goLeaderboard } from './screens/leaderboard.js';
 import { goProfile } from './screens/profile.js';
+import { goSkins } from './screens/skins.js';
 
 // ── splash ────────────────────────────────────────────────────────────────
 function playSplash(onDone) {
@@ -102,8 +103,18 @@ function initNav() {
     if (dest === 'home') goHome();
     else if (dest === 'play') goTraining();
     else if (dest === 'leaderboard') goLeaderboard();
+    else if (dest === 'skins') goSkins();
     else if (dest === 'profile') goProfile();
   }));
+  // Color-scheme toggle (dark/light): client-only, works for guests.
+  const syncToggles = () => {
+    const light = document.documentElement.dataset.scheme === 'light';
+    for (const btn of $$('#schemeToggle, #schemeToggleM')) btn.textContent = light ? '☀' : '☾';
+  };
+  for (const btn of $$('#schemeToggle, #schemeToggleM')) {
+    btn.addEventListener('click', () => { toggleScheme(); syncToggles(); });
+  }
+  syncToggles();
   $('#logoutBtn').addEventListener('click', async () => {
     try { await api('POST', '/api/auth/logout'); } catch { /* session may be gone */ }
     setToken(null);
@@ -124,6 +135,12 @@ async function enterApp() {
   $('#screen-splash').classList.add('hidden');
   $('#shell').classList.remove('hidden');
   claimDailyLoginBonus();
+  // Re-validate the locally stored skin against server ownership; fall back
+  // to the default skin if localStorage holds a stale/tampered id.
+  try {
+    const skins = await api('GET', '/api/skins');
+    validateActiveSkin(skins.unlocked);
+  } catch { /* offline: keep local choice until next boot */ }
   await goHome();
 }
 
@@ -136,7 +153,8 @@ async function claimDailyLoginBonus() {
 }
 
 async function boot() {
-  initTheme(); // restore saved palette + labels BEFORE first paint
+  initScheme(); // dark/light restored BEFORE first paint (no scheme flash)
+  initTheme(); // restore saved skin locally; ownership re-checked below
   initAuth();
   initNav();
   initHome();

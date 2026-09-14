@@ -562,6 +562,111 @@ test('leaderboard reflects registered players, hides guests', async () => {
   assert.ok(!board.json.entries.some((e) => e.displayName.startsWith('Guest-')));
 });
 
+// ── SKINS (world skins; server-validated ownership) ───────────────────────
+test('skins: rejects unknown id and free skins, enforces balance, catalog shape correct', async () => {
+  const p = await newPlayer();
+
+  // unknown skin id rejected
+  const bogus = await api('POST', '/api/skins/unlock', { token: p.token, body: { skinId: 'not-a-skin' } });
+  assert.equal(bogus.status, 400);
+  assert.equal(bogus.json.error, 'unknown_skin');
+
+  // free skins have nothing to unlock
+  const free = await api('POST', '/api/skins/unlock', { token: p.token, body: { skinId: 'detective' } });
+  assert.equal(free.status, 400);
+  assert.equal(free.json.error, 'skin_is_free');
+
+  // catalog endpoint: fresh player owns only detective; paid skins priced
+  const cat = await api('GET', '/api/skins', { token: p.token });
+  assert.equal(cat.status, 200);
+  assert.deepEqual(cat.json.unlocked, ['detective']);
+  const spaceEntry = cat.json.skins.find((s) => s.id === 'space');
+  const treasureEntry = cat.json.skins.find((s) => s.id === 'treasure');
+  assert.equal(spaceEntry.priceInDiamonds, 120);
+  assert.equal(treasureEntry.priceInDiamonds, 120);
+  assert.equal(spaceEntry.free, false);
+  assert.equal(cat.json.skins.find((s) => s.id === 'detective').free, true);
+
+  // insufficient balance: rejected with 402 and NOTHING deducted
+  const broke = await api('POST', '/api/skins/unlock', { token: p.token, body: { skinId: 'space' } });
+  assert.equal(broke.status, 402);
+  assert.equal(broke.json.error, 'insufficient_diamonds');
+  const wallet = await api('GET', '/api/wallet', { token: p.token });
+  assert.equal(wallet.json.diamonds, 0, 'failed unlock never deducts');
+  const catAfter = await api('GET', '/api/skins', { token: p.token });
+  assert.deepEqual(catAfter.json.unlocked, ['detective'], 'no partial unlock state');
+});
+
+test('skins: successful unlock deducts exactly once and double-unlock returns 409 (dedicated server, high ad cap)', async () => {
+  const PORT2 = 3179;
+  const BASE2 = `http://127.0.0.1:${PORT2}`;
+  const dir2 = mkdtempSync(join(tmpdir(), 'arena-skins-'));
+  const child2 = spawn(process.execPath, ['src/server/index.js'], {
+    env: { ...process.env, PORT: String(PORT2), DB_PATH: join(dir2, 'skins.db'), RATE_AUTH: '200', RATE_SUBMIT: '1000', RATE_API: '5000' },
+    stdio: 'ignore',
+  });
+  const api2 = async (method, path, { token, body } = {}) => {
+    const res = await fetch(BASE2 + path, {
+      method,
+      headers: {
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    let json = null;
+    try { json = await res.json(); } catch { /* non-JSON */ }
+    return { status: res.status, json };
+  };
+  try {
+    for (let i = 0; i < 40; i++) {
+      try { const r = await fetch(BASE2 + '/api/me'); if (r.status === 401) break; } catch {}
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    const reg = await api2('POST', '/api/auth/guest', { body: {} });
+    assert.equal(reg.status, 200);
+    const { token } = reg.json;
+    // Deterministic funding via legit endpoints: daily login bonus (+5) and
+    // the full 5/day ad-reward cap (+25) = 30. Below the 120 price, so the
+    // 402 path is proven with real state before DB-level top-up.
+    const bonus = await api2('POST', '/api/bonus/daily', { token, body: {} });
+    assert.equal(bonus.status, 200);
+    for (let i = 0; i < 5; i++) {
+      const r = await api2('POST', '/api/ad-reward', { token, body: { provider: 'mock' } });
+      assert.equal(r.status, 200);
+    }
+    const broke = await api2('POST', '/api/skins/unlock', { token, body: { skinId: 'space' } });
+    assert.equal(broke.status, 402);
+    const w1 = await api2('GET', '/api/wallet', { token });
+    assert.equal(w1.json.diamonds, 30, 'funding deterministic');
+
+    // DB-level funding: insert diamonds directly (test-only) to cross 120.
+    const { DatabaseSync } = await import('node:sqlite');
+    const db = new DatabaseSync(join(dir2, 'skins.db'));
+    db.prepare("UPDATE players SET diamonds = 200 WHERE is_guest = 1").run();
+    db.close();
+
+    const w2 = await api2('GET', '/api/wallet', { token });
+    assert.equal(w2.json.diamonds, 200, 'direct DB funding visible');
+
+    const ok = await api2('POST', '/api/skins/unlock', { token, body: { skinId: 'space' } });
+    assert.equal(ok.status, 200, JSON.stringify(ok.json));
+    assert.equal(ok.json.diamonds, 80, 'deducted exactly 120 once');
+    assert.deepEqual(ok.json.unlocked, ['detective', 'space']);
+
+    const dup = await api2('POST', '/api/skins/unlock', { token: token, body: { skinId: 'space' } });
+    assert.equal(dup.status, 409);
+    assert.equal(dup.json.error, 'already_unlocked');
+    assert.equal(dup.json.diamonds, 80, 'no double deduction');
+    const w3 = await api2('GET', '/api/wallet', { token });
+    assert.equal(w3.json.diamonds, 80);
+  } finally {
+    child2.kill();
+    await new Promise((r) => setTimeout(r, 400)); // Windows file release
+    try { rmSync(dir2, { recursive: true, force: true }); } catch { /* best effort */ }
+  }
+});
+
 test('profile aggregates stats and empty state is clean', async () => {
   const p = await newPlayer();
   const prof = await api('GET', '/api/profile', { token: p.token });

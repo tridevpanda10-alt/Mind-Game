@@ -168,6 +168,8 @@ export function initDb(dbPath) {
   addCol('players', '"referral_code" TEXT');
   addCol('players', '"referred_by" TEXT');
   addCol('players', '"first_match_at" INTEGER');
+  // Owned world skins: JSON array of skin ids; detective is free/always owned.
+  addCol('players', '"unlocked_skins" TEXT NOT NULL DEFAULT \'["detective"]\'');
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_players_referral ON players(referral_code) WHERE referral_code IS NOT NULL');
   return db;
 }

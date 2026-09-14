@@ -12,6 +12,7 @@ import { hashPassword, verifyPassword, newSessionToken, hashToken, newPlayerId }
 import { randomBytes } from 'node:crypto';
 import { startMatch, submitAnswer, finishMatch, abandonMatch, buildDailyTypes, puzzlePayload, takeKey, puzzlesRemaining, hintPuzzle, skipPuzzle, awardDailyLoginBonus, DIAMONDS, startTournamentMatch } from './matchService.js';
 import { MODES, levelProgress } from './scoring.js';
+import { isKnownSkin, getSkin, skinCatalog } from './skins.js';
 import { seedFromString } from './puzzles/rng.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -593,6 +594,42 @@ app.get('/api/config', (req, res) => {
       adClient: ADS_PROVIDER === 'google-h5' ? ADS_CLIENT : null,
     },
   });
+});
+
+// ── SKINS (world skins; ownership server-validated, diamonds only) ──────
+// The client's skin registry is presentation; THIS list is the trusted
+// price/ownership source. A skin unlock is an economy mutation like any
+// other: validated against the DB, deducted atomically, fully logged.
+function unlockedSkinsOf(playerId) {
+  const row = one('SELECT unlocked_skins FROM players WHERE player_id = ?', [playerId]);
+  try { return JSON.parse(row?.unlocked_skins ?? '[]'); } catch { return ['detective']; }
+}
+
+app.get('/api/skins', requireAuth, (req, res) => {
+  res.json({ unlocked: unlockedSkinsOf(req.session.player_id), skins: skinCatalog() });
+});
+
+app.post('/api/skins/unlock', submitLimiter, requireAuth, (req, res) => {
+  const skinId = typeof req.body?.skinId === 'string' ? req.body.skinId.slice(0, 32) : '';
+  const skin = getSkin(skinId);
+  if (!isKnownSkin(skinId) || !skin) return res.status(400).json({ error: 'unknown_skin' });
+  if (skin.free) return res.status(400).json({ error: 'skin_is_free', detail: 'This skin is free for everyone; nothing to unlock.' });
+  const owned = unlockedSkinsOf(req.session.player_id);
+  if (owned.includes(skinId)) {
+    return res.status(409).json({ error: 'already_unlocked', detail: 'You already own this skin.', unlocked: owned, diamonds: diamondsOf(req.session.player_id) });
+  }
+  const balance = diamondsOf(req.session.player_id);
+  if (balance < skin.priceInDiamonds) {
+    return res.status(402).json({ error: 'insufficient_diamonds', detail: `This skin costs ${skin.priceInDiamonds} 💎. You have ${balance} 💎.` });
+  }
+  transaction(() => {
+    q('UPDATE players SET diamonds = diamonds - ? WHERE player_id = ?', [skin.priceInDiamonds, req.session.player_id]);
+    const next = JSON.stringify([...owned, skinId]);
+    q('UPDATE players SET unlocked_skins = ? WHERE player_id = ?', [next, req.session.player_id]);
+    q('INSERT INTO economy_log (at, player_id, kind, amount, day) VALUES (?, ?, ?, ?, ?)', [Date.now(), req.session.player_id, 'skin_unlock', -skin.priceInDiamonds, todayKey()]);
+  });
+  logAudit(req.session.player_id, 'skin_unlock', { skinId, price: skin.priceInDiamonds });
+  res.json({ ok: true, skinId, diamonds: diamondsOf(req.session.player_id), unlocked: unlockedSkinsOf(req.session.player_id) });
 });
 
 // ── AD REWARDS (server-enforced quota; provider-verifiable) ───────────────

@@ -1,7 +1,7 @@
 // Service worker: caches the static app shell for offline load. Data and API
 // calls are NEVER cached (match/score/diamond endpoints stay network-only).
 // Bump the version whenever precached files change, or users keep the old UI.
-const CACHE = 'mindgame-shell-v4';
+const CACHE = 'mindgame-shell-v5';
 const SHELL = [
   '/',
   '/index.html',
@@ -20,6 +20,7 @@ const SHELL = [
   '/js/screens/training.js',
   '/js/screens/leaderboard.js',
   '/js/screens/profile.js',
+  '/js/screens/skins.js',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',

@@ -1,6 +1,10 @@
 /* Competitive Reasoning Arena — dark, restrained, competitive.
    Layout: mobile-first; sidebar appears ≥900px; bottom nav hides ≥900px. */
 
+/* Color SCHEME (dark default / light) and skin palettes are independent:
+   <html data-scheme="dark|light"> × <html data-theme="detective|space|treasure">
+   Dark is the base :root; [data-scheme] adjusts neutrals; [data-theme] adjusts
+   accents. Light stays readable under every skin accent. */
 :root {
   --bg: #0b0e14;
   --bg2: #10141d;
@@ -17,6 +21,31 @@
   --radius: 14px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   --focus: 0 0 0 3px rgba(76, 201, 240, 0.35);
+  --btn-hover-bg: #202840;
+  --btn-hover-border: #2e3a5c;
+  --bottom-nav-bg: rgba(13, 17, 26, 0.92);
+  --hover-wash: rgba(255, 255, 255, 0.04);
+  --tab-active-bg: var(--card2);
+}
+
+:root[data-scheme='light'] {
+  --bg: #f4f1ea;
+  --bg2: #fbf8f1;
+  --card: #fffdf7;
+  --card2: #f4efe3;
+  --line: #ddd3c0;
+  --text: #26221b;
+  --muted: #6e6656;
+  --good: #0f8f66;
+  --bad: #c6394a;
+  --warn: #a06a00;
+  --shadow: 0 8px 24px rgba(38, 34, 27, 0.12);
+  --focus: 0 0 0 3px rgba(11, 92, 138, 0.35);
+  --btn-hover-bg: #ede7d8;
+  --btn-hover-border: #c9bda5;
+  --bottom-nav-bg: rgba(251, 248, 241, 0.94);
+  --hover-wash: rgba(38, 34, 27, 0.05);
+  --tab-active-bg: var(--card2);
 }
 
 * { box-sizing: border-box; }
@@ -65,7 +94,7 @@ p { margin: 0 0 8px; }
   border-radius: 10px;
   transition: transform 0.06s ease, background 0.15s ease, border-color 0.15s ease;
 }
-.btn:hover { background: #202840; border-color: #2e3a5c; }
+.btn:hover { background: var(--btn-hover-bg); border-color: var(--btn-hover-border); }
 .btn:active { transform: translateY(1px); }
 .btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); border: none; color: #081018; font-weight: 700; }
 .btn.primary:hover { filter: brightness(1.08); }
@@ -117,8 +146,8 @@ button:focus-visible, input:focus-visible, .tab:focus-visible, .opt:focus-visibl
 .sidebar { display: none; }
 .bottom-nav {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
-  display: grid; grid-template-columns: repeat(4, 1fr);
-  background: rgba(13, 17, 26, 0.92);
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  background: var(--bottom-nav-bg);
   border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom);
 }
@@ -128,7 +157,7 @@ button:focus-visible, input:focus-visible, .tab:focus-visible, .opt:focus-visibl
 }
 .bnav.active, .nav-btn.active { color: var(--accent); }
 .nav-btn { display: block; width: 100%; text-align: left; padding: 10px 12px; border-radius: 8px; margin: 2px 8px; }
-.nav-btn:hover, .bnav:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
+.nav-btn:hover, .bnav:hover { color: var(--text); background: var(--hover-wash); }
 .nav-btn.logout { color: var(--muted); margin-top: auto; }
 main { flex: 1; padding-bottom: 76px; }
 
@@ -361,35 +390,159 @@ main { flex: 1; padding-bottom: 76px; }
 
 .invite-card { margin-top: 18px; }
 
-/* ── Theme system: palettes keyed off <html data-theme> (set by theme.js).
-   Only variables change; every component reads the same custom properties. */
+/* ── SKIN palettes (story worlds): <html data-theme> accents layered ON TOP
+   of the scheme (dark/light adjusts neutrals first, skin tints accents). */
+:root[data-theme='detective'] {
+  --accent: #4cc9f0;
+  --accent2: #7b6cf6;
+}
+:root[data-scheme='light'][data-theme='detective'] {
+  --accent: #0b5c8a;
+  --accent2: #5b4bc4;
+}
 :root[data-theme='space'] {
-  --bg: #070b18;
-  --bg2: #0c1226;
-  --card: #111936;
-  --card2: #17204a;
-  --line: #25315e;
-  --text: #e6ecff;
-  --muted: #93a0c9;
   --accent: #53e0ff;
   --accent2: #ff5fd2;
-  --good: #45e6b0;
-  --bad: #ff6d84;
-  --warn: #ffd166;
-  --shadow: 0 12px 34px rgba(3, 6, 20, 0.5);
-  --focus: 0 0 0 3px rgba(83, 224, 255, 0.35);
 }
-:root[data-theme='space'] body {
-  background:
-    radial-gradient(1100px 520px at 85% -10%, rgba(255, 95, 210, 0.09), transparent 60%),
-    radial-gradient(900px 420px at -10% 110%, rgba(83, 224, 255, 0.08), transparent 60%),
-    var(--bg);
+:root[data-scheme='light'][data-theme='space'] {
+  --accent: #076e8c;
+  --accent2: #a12587;
 }
-:root[data-theme='space'] .brand-mark {
+:root[data-theme='treasure'] {
+  --accent: #e8b04b;
+  --accent2: #c9762d;
+}
+:root[data-scheme='light'][data-theme='treasure'] {
+  --accent: #8a5f10;
+  --accent2: #9c4f16;
+}
+
+/* ── SKIN flourishes (CSS-only, @keyframes, reduced-motion respected) ── */
+body.skin-space::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: transparent;
+  background-image:
+    radial-gradient(1.5px 1.5px at 12% 22%, rgba(230, 240, 255, 0.9), transparent 60%),
+    radial-gradient(1px 1px at 34% 68%, rgba(230, 240, 255, 0.65), transparent 60%),
+    radial-gradient(2px 2px at 58% 14%, rgba(200, 220, 255, 0.8), transparent 60%),
+    radial-gradient(1px 1px at 72% 48%, rgba(230, 240, 255, 0.6), transparent 60%),
+    radial-gradient(1.5px 1.5px at 86% 78%, rgba(230, 240, 255, 0.85), transparent 60%),
+    radial-gradient(1px 1px at 22% 88%, rgba(200, 220, 255, 0.55), transparent 60%),
+    radial-gradient(1.5px 1.5px at 48% 40%, rgba(255, 220, 250, 0.7), transparent 60%),
+    radial-gradient(1px 1px at 92% 30%, rgba(230, 240, 255, 0.6), transparent 60%);
+  animation: starfield-drift 90s linear infinite;
+}
+@keyframes starfield-drift {
+  from { background-position: 0 0; }
+  to { background-position: -600px 300px; }
+}
+body.skin-space .brand-mark {
   box-shadow: inset 0 0 8px rgba(255, 95, 210, 0.4);
 }
-:root[data-theme='space'] .btn:hover { background: #1d2852; border-color: #33417c; }
 
-/* profile: theme picker */
+body.skin-treasure {
+  background:
+    radial-gradient(1000px 460px at 85% -10%, rgba(232, 176, 75, 0.1), transparent 60%),
+    radial-gradient(820px 400px at -10% 110%, rgba(201, 118, 45, 0.09), transparent 60%),
+    var(--bg);
+}
+body.skin-treasure .btn.primary {
+  animation: gold-pulse 3.2s ease-in-out infinite;
+}
+body.skin-treasure .mode-card,
+body.skin-treasure .invite-card {
+  animation: gold-border-pulse 4.5s ease-in-out infinite;
+}
+@keyframes gold-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.1); }
+}
+@keyframes gold-border-pulse {
+  0%, 100% { border-color: var(--line); }
+  50% { border-color: rgba(232, 176, 75, 0.55); }
+}
+
+/* Respect reduced motion: flourishes stop animating, remain decorative. */
+@media (prefers-reduced-motion: reduce) {
+  body.skin-space::before { animation: none; }
+  body.skin-treasure .btn.primary,
+  body.skin-treasure .mode-card,
+  body.skin-treasure .invite-card { animation: none; }
+}
+
+/* ── scheme toggle + skins store ──────────────────────────────────────── */
+.scheme-toggle {
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 10px;
+  width: 34px;
+  height: 34px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 1rem;
+  flex: 0 0 auto;
+}
+.scheme-toggle:hover { background: var(--btn-hover-bg); }
+.sidebar .scheme-toggle { margin: 2px 8px 8px; align-self: flex-start; }
+.bottom-nav .scheme-toggle { margin: 0 6px; }
+
+.skins-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 640px) { .skins-grid { grid-template-columns: 1fr 1fr; } }
+.skin-card { display: grid; gap: 10px; }
+.skin-card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow); }
+.skin-swatch {
+  height: 72px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  position: relative;
+  overflow: hidden;
+}
+.skin-swatch::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  opacity: 0.25;
+}
+.skin-swatch.sw-space {
+  background-color: #070b18;
+  background-image:
+    radial-gradient(1.5px 1.5px at 20% 30%, rgba(230, 240, 255, 0.9), transparent 60%),
+    radial-gradient(1px 1px at 55% 65%, rgba(230, 240, 255, 0.65), transparent 60%),
+    radial-gradient(2px 2px at 78% 22%, rgba(200, 220, 255, 0.85), transparent 60%),
+    radial-gradient(1px 1px at 38% 80%, rgba(255, 220, 250, 0.7), transparent 60%);
+  animation: starfield-drift 90s linear infinite;
+}
+.skin-swatch.sw-treasure {
+  background:
+    radial-gradient(240px 120px at 80% 0%, rgba(232, 176, 75, 0.3), transparent 60%),
+    radial-gradient(200px 120px at 10% 100%, rgba(201, 118, 45, 0.25), transparent 60%),
+    #f0e2c4;
+  animation: gold-border-pulse 4.5s ease-in-out infinite;
+  border-color: rgba(138, 95, 16, 0.5);
+}
+.skin-swatch.sw-detective {
+  background:
+    radial-gradient(240px 120px at 80% 0%, rgba(76, 201, 240, 0.18), transparent 60%),
+    radial-gradient(200px 120px at 10% 100%, rgba(123, 108, 246, 0.16), transparent 60%),
+    #141927;
+}
+.skin-price { font-weight: 700; color: var(--accent); }
+.skin-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.skin-badge.owned { color: var(--good); border-color: rgba(56, 211, 159, 0.4); }
+.skin-badge.active { color: var(--accent); border-color: var(--accent); }
+
+/* profile: theme picker (kept until skins store replaces it) */
 .theme-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 .referral-input { flex: 1 1 260px; min-width: 200px; background: var(--card2, #12151d); border: 1px solid var(--line); border-radius: 8px; color: var(--text); padding: 9px 12px; font-size: 0.92rem; }

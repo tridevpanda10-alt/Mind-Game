@@ -60,8 +60,10 @@
           <button class="nav-btn" data-nav="home">Home</button>
           <button class="nav-btn" data-nav="play">Play</button>
           <button class="nav-btn" data-nav="leaderboard">Ranking</button>
+          <button class="nav-btn" data-nav="skins">Skins</button>
           <button class="nav-btn" data-nav="profile">Profile</button>
         </nav>
+        <button class="scheme-toggle" id="schemeToggle" type="button" aria-label="Switch color scheme">☾</button>
         <button class="nav-btn logout" id="logoutBtn">Log out</button>
       </aside>
 
@@ -202,6 +204,13 @@
           <div id="lbBody" class="lb"></div>
         </section>
 
+        <!-- SKINS STORE -->
+        <section id="screen-skins" class="screen hidden" aria-label="Skins store">
+          <header class="screen-head"><h2>Skins</h2></header>
+          <p class="sub">World skins change the story, wording, and flourish of the whole game. Ownership is saved to your account; the color scheme (☾) is separate and always free.</p>
+          <div id="skinsBody" class="skins-grid"></div>
+        </section>
+
         <!-- PROFILE -->
         <section id="screen-profile" class="screen hidden" aria-label="Profile">
           <header class="screen-head"><h2>Profile</h2></header>
@@ -214,7 +223,9 @@
       <button class="bnav" data-nav="home">Home</button>
       <button class="bnav" data-nav="play">Play</button>
       <button class="bnav" data-nav="leaderboard">Ranking</button>
+      <button class="bnav" data-nav="skins">Skins</button>
       <button class="bnav" data-nav="profile">Profile</button>
+      <button class="scheme-toggle" id="schemeToggleM" type="button" aria-label="Switch color scheme">☾</button>
     </nav>
 
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
