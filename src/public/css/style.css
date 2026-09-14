@@ -360,4 +360,36 @@ main { flex: 1; padding-bottom: 76px; }
 .diamonds-chip .chip-value { color: var(--accent, #4cc9f0); font-weight: 700; }
 
 .invite-card { margin-top: 18px; }
+
+/* ── Theme system: palettes keyed off <html data-theme> (set by theme.js).
+   Only variables change; every component reads the same custom properties. */
+:root[data-theme='space'] {
+  --bg: #070b18;
+  --bg2: #0c1226;
+  --card: #111936;
+  --card2: #17204a;
+  --line: #25315e;
+  --text: #e6ecff;
+  --muted: #93a0c9;
+  --accent: #53e0ff;
+  --accent2: #ff5fd2;
+  --good: #45e6b0;
+  --bad: #ff6d84;
+  --warn: #ffd166;
+  --shadow: 0 12px 34px rgba(3, 6, 20, 0.5);
+  --focus: 0 0 0 3px rgba(83, 224, 255, 0.35);
+}
+:root[data-theme='space'] body {
+  background:
+    radial-gradient(1100px 520px at 85% -10%, rgba(255, 95, 210, 0.09), transparent 60%),
+    radial-gradient(900px 420px at -10% 110%, rgba(83, 224, 255, 0.08), transparent 60%),
+    var(--bg);
+}
+:root[data-theme='space'] .brand-mark {
+  box-shadow: inset 0 0 8px rgba(255, 95, 210, 0.4);
+}
+:root[data-theme='space'] .btn:hover { background: #1d2852; border-color: #33417c; }
+
+/* profile: theme picker */
+.theme-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 .referral-input { flex: 1 1 260px; min-width: 200px; background: var(--card2, #12151d); border: 1px solid var(--line); border-radius: 8px; color: var(--text); padding: 9px 12px; font-size: 0.92rem; }

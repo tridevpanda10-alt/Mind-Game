@@ -3,6 +3,7 @@
 import { api, setToken, getToken, captureReferralFromUrl, getStoredReferral, clearStoredReferral } from './api.js';
 import { initAds } from './ads.js';
 import { $, $$, el, showScreen, toast, spinner } from './ui.js';
+import { initTheme, theme } from './theme.js';
 import { initGame, exitMatch, getState } from './screens/game.js';
 import { initHome, goHome } from './screens/home.js';
 import { initTraining, goTraining } from './screens/training.js';
@@ -13,7 +14,7 @@ import { goProfile } from './screens/profile.js';
 function playSplash(onDone) {
   const seq = $('#splashSeq');
   seq.replaceChildren();
-  const words = ['THINK.', 'ANALYZE.', 'SOLVE.'];
+  const words = theme.splash;
   words.forEach((w, i) => {
     const s = el('div', { class: 'splash-word', text: w });
     s.style.animationDelay = `${i * 1.05}s`;
@@ -135,6 +136,7 @@ async function claimDailyLoginBonus() {
 }
 
 async function boot() {
+  initTheme(); // restore saved palette + labels BEFORE first paint
   initAuth();
   initNav();
   initHome();

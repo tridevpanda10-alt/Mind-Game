@@ -2,6 +2,7 @@
 
 import { api } from '../api.js';
 import { $, el, showScreen, fmtMs, pct } from '../ui.js';
+import { listThemes, setTheme, getThemeId } from '../theme.js';
 
 const TYPE_NAMES = {
   pattern: 'Pattern', sequence: 'Sequence', matrix: 'Matrix', deduction: 'Deduction',
@@ -30,6 +31,9 @@ export async function goProfile() {
       ),
     );
     body.append(overview);
+
+    // settings card: theme picker (swaps labels + palette at runtime)
+    body.append(buildThemeCard());
 
     // skills card
     const skills = el('div', { class: 'card' },
@@ -84,6 +88,28 @@ export async function goProfile() {
   } catch (err) {
     body.replaceChildren(el('p', { class: 'sub', text: err.detail ?? 'Could not load profile.' }));
   }
+}
+
+// Theme picker: one button per registered theme; click swaps the whole UI
+// (labels, flavor text, palette) instantly via the theme module.
+function buildThemeCard() {
+  const card = el('div', { class: 'card' }, el('h3', { text: 'Theme' }));
+  const active = getThemeId();
+  const row = el('div', { class: 'theme-row', role: 'group', 'aria-label': 'UI theme' });
+  for (const t of listThemes()) {
+    row.append(el('button', {
+      class: `diff-btn${t.id === active ? ' active' : ''}`,
+      type: 'button',
+      'data-theme-id': t.id,
+      onclick: (e) => {
+        if (!setTheme(t.id)) return;
+        document.querySelectorAll('.theme-row .diff-btn').forEach((b) =>
+          b.classList.toggle('active', b.dataset.themeId === t.id));
+      },
+    }, `${t.name}`));
+  }
+  card.append(row);
+  return card;
 }
 
 function cell(label, value) {
