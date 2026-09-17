@@ -12,10 +12,12 @@ import { generateNumber } from './types/number.js';
 import { generateOperator } from './types/operator.js';
 import { generateSpatial } from './types/spatial.js';
 import { generateMastermind } from './types/mastermind.js';
+import { generateOrdering } from './types/ordering.js';
+import { generateStory } from './types/story.js';
 
 export const PUZZLE_TYPES = [
   'pattern', 'sequence', 'matrix', 'deduction', 'conditional',
-  'number', 'operator', 'spatial', 'mastermind',
+  'number', 'operator', 'spatial', 'mastermind', 'ordering', 'story',
 ];
 
 export const DIFFICULTIES = ['rookie', 'easy', 'medium', 'hard', 'expert', 'master'];
@@ -32,11 +34,13 @@ const GENERATORS = {
   operator: generateOperator,
   spatial: generateSpatial,
   mastermind: generateMastermind,
+  ordering: generateOrdering,
+  story: generateStory,
 };
 
 // Estimated solve time in seconds per type and difficulty band — used for
 // pacing, timer defaults, and difficulty-consistency validation.
-const BASE_SECONDS = { pattern: 30, sequence: 30, matrix: 40, deduction: 50, conditional: 50, number: 45, operator: 25, spatial: 45, mastermind: 75 };
+const BASE_SECONDS = { pattern: 30, sequence: 30, matrix: 40, deduction: 50, conditional: 50, number: 45, operator: 25, spatial: 45, mastermind: 75, ordering: 60, story: 70 };
 
 export function estimateSeconds(type, difficulty) {
   const idx = DIFFICULTY_INDEX[difficulty] ?? 3;
@@ -67,6 +71,7 @@ export function makePuzzle(type, difficulty, seed) {
   if (core.rows) puzzle.rows = core.rows;
   if (core.kind) puzzle.kind = core.kind;
   if (core.grid) puzzle.grid = core.grid;
+  if (core.scene) puzzle.scene = core.scene; // story puzzles: illustration payload (no answers inside)
   const err = validatePuzzle(puzzle);
   if (err) return null;
   return puzzle;

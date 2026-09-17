@@ -8,7 +8,7 @@ import { getMusicVolume, setMusicVolume, getSfxVolume, setSfxVolume, getVibratio
 const TYPE_NAMES = {
   pattern: 'Pattern', sequence: 'Sequence', matrix: 'Matrix', deduction: 'Deduction',
   conditional: 'Conditional', number: 'Number', operator: 'Operator', spatial: 'Spatial',
-  mastermind: 'Mastermind',
+  mastermind: 'Mastermind', ordering: 'Ordering', story: 'Story',
 };
 
 export async function goProfile() {

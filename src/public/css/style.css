@@ -265,6 +265,19 @@ main { flex: 1; padding-bottom: 76px; }
 .fold-grid { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; align-items: center; margin: 8px 0; }
 .rot-grid { margin: 6px auto; max-width: 220px; }
 
+/* story scenes: layered SVG illustrations (original artwork) */
+.story-scene {
+  display: block;
+  width: 100%; max-width: 480px;
+  margin: 6px auto 10px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+@media (max-width: 480px) {
+  .story-scene { border-radius: 10px; }
+}
+
 /* results */
 .results { display: flex; flex-direction: column; gap: 12px; }
 .score-hero {

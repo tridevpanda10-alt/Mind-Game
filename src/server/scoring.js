@@ -70,6 +70,14 @@ function comboBonus(results) {
   return bonus;
 }
 
+// Par score: the points a PERFECT, no-speed-bonus run of these results would
+// earn (sum of difficulty base points). Used as the fairness floor when a
+// daily challenge is rated against the day's field — the benchmark can never
+// be lower than "solve everything correctly at a normal pace".
+export function parScore(results) {
+  return results.reduce((acc, r) => acc + (BASE_POINTS[r?.difficulty] ?? 100), 0);
+}
+
 export function xpForMatch(results, mode) {
   const correct = results.filter((r) => r.correct).length;
   const base = correct * 20;

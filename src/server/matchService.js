@@ -12,7 +12,7 @@
 //     server-side. The client never sends multiplier or streak values.
 
 import { makePuzzleBatch } from './puzzles/engine.js';
-import { MODES, scoreMatch, xpForMatch, ratingUpdate, dailyScoreToRatingDelta, evaluateAchievements, levelProgress } from './scoring.js';
+import { MODES, scoreMatch, xpForMatch, ratingUpdate, dailyScoreToRatingDelta, parScore, evaluateAchievements, levelProgress } from './scoring.js';
 import { newMatchId } from './auth.js';
 import { q, all, one, transaction, logAudit } from './db.js';
 import { getDb } from './db.js';
@@ -60,8 +60,8 @@ function dropKey(matchId) {
 }
 
 export function buildDailyTypes(day) {
-  // deterministic type mix per day; all nine types rotate over the week
-  const allTypes = ['pattern', 'sequence', 'matrix', 'deduction', 'conditional', 'number', 'operator', 'spatial', 'mastermind'];
+  // deterministic type mix per day; all eleven types rotate over the week
+  const allTypes = ['pattern', 'sequence', 'matrix', 'deduction', 'conditional', 'number', 'operator', 'spatial', 'mastermind', 'ordering', 'story'];
   return allTypes.slice(0, 4 + (day.length % 3));
 }
 
@@ -74,7 +74,7 @@ export function dailyCount() {
 // Weekly tournament: one fixed seeded puzzle set per week (same length as a
 // daily case). The caller supplies the week seed; entry costs diamonds.
 export function startTournamentMatch({ playerId, seed }) {
-  const allTypes = ['pattern', 'sequence', 'matrix', 'deduction', 'conditional', 'number', 'operator', 'spatial', 'mastermind'];
+  const allTypes = ['pattern', 'sequence', 'matrix', 'deduction', 'conditional', 'number', 'operator', 'spatial', 'mastermind', 'ordering', 'story'];
   return startMatch({ playerId, mode: MODES.TOURNAMENT, seed, types: allTypes, difficulty: 'medium' });
 }
 
@@ -146,6 +146,7 @@ export function puzzlePayload(p, revealed = false) {
   if (p.rows) out.rows = p.rows;
   if (p.grid) out.grid = p.grid;
   if (p.kind) out.kind = p.kind;
+  if (p.scene) out.scene = p.scene; // story illustrations (verified answer-free)
   if (revealed) {
     out.correct = p.correct;
     out.explanation = p.explanation;
@@ -372,9 +373,26 @@ export function finishMatch({ matchId, playerId }) {
     const ratingBefore = player.rating;
     let ratingAfter = ratingBefore;
     if (mp.mode === 'quick') {
-      ratingAfter = ratingUpdate(ratingBefore, 1000, correctCount / totalCount, /*gamesPlayed*/ 0);
+      // gamesPlayed: real count of prior completed competitive matches, so the
+      // provisional K=48 relaxes to K=32/24 as a player is actually ranked.
+      // (This previously passed a literal 0 — provisional K forever.)
+      const gamesPlayed = one("SELECT COUNT(*) AS n FROM match_players WHERE player_id = ? AND mode = 'quick' AND status = 'completed'", [playerId]).n;
+      ratingAfter = ratingUpdate(ratingBefore, 1000, correctCount / totalCount, gamesPlayed);
     } else if (mp.mode === 'daily') {
-      ratingAfter = ratingBefore + dailyScoreToRatingDelta(score, 0);
+      // Daily delta benchmarks the player against the field's best COMPLETED
+      // score today, floored at par (a perfect run's base points) so a strong
+      // day can't rate below neutral merely because the field is still empty.
+      // (This previously passed poolTop = 0 — EVERY completed daily lost 8.)
+      const dayRow = one('SELECT day FROM daily_usage WHERE match_id = ? AND player_id = ?', [matchId, playerId]);
+      const fieldTop = dayRow
+        ? one(
+            `SELECT MAX(mp.score) AS top
+             FROM match_players mp JOIN daily_usage du ON du.match_id = mp.match_id AND du.player_id = mp.player_id
+             WHERE du.day = ? AND mp.status = 'completed'`,
+            [dayRow.day],
+          ).top
+        : null;
+      ratingAfter = ratingBefore + dailyScoreToRatingDelta(score, Math.max(fieldTop ?? 0, parScore(results)));
     }
 
     q(
@@ -673,7 +691,7 @@ export function startCampaignCase({ playerId, caseNumber }) {
 
   const boss = caseIsBoss(n);
   const difficulty = campaignDifficultyFor(n); // single tier per case
-  const types = ['pattern', 'sequence', 'matrix', 'deduction', 'conditional', 'number', 'operator', 'spatial', 'mastermind'];
+  const types = ['pattern', 'sequence', 'matrix', 'deduction', 'conditional', 'number', 'operator', 'spatial', 'mastermind', 'ordering', 'story'];
   const seed = 1_000_000 + n * 7919; // deterministic per case; still server-held
   const started = startMatch({ playerId, mode: MODES.CAMPAIGN, seed, types, difficulty, boss });
   if (started.error) return started;

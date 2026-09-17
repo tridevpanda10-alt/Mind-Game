@@ -5,7 +5,7 @@
 
 import { api, getDiamonds, setDiamonds } from '../api.js';
 import { $, $$, el, showScreen, fmtClock, fmtMs, toast, spinner } from '../ui.js';
-import { renderQuestion, renderOption, typeLabel } from '../render.js';
+import { renderQuestion, renderOption, typeLabel, storyScene } from '../render.js';
 import { theme, matchTheme, campaignTheme } from '../theme.js';
 import { sfxCorrect, sfxWrong, sfxCombo, vibrate } from '../sfx.js';
 
@@ -253,6 +253,11 @@ function renderPuzzle() {
 
   const vis = $('#qVisual');
   vis.replaceChildren();
+  // Story puzzles: the illustrated scene IS part of the question — render it
+  // before any structural visual (matrix/rows/grid), then the caption stays
+  // fully readable in #qText for accessibility with visuals off.
+  const scene = storyScene(p);
+  if (scene) vis.append(scene);
   for (const node of renderQuestion(p)) vis.append(node);
 
   // options

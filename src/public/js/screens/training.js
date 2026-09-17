@@ -13,6 +13,8 @@ const TYPES = [
   ['operator', 'Operator Logic'],
   ['spatial', 'Spatial Reasoning'],
   ['mastermind', 'Mastermind Logic'],
+  ['ordering', 'Ordering & Ranking'],
+  ['story', 'Story Deduction'],
 ];
 const DIFFS = ['rookie', 'easy', 'medium', 'hard', 'expert', 'master'];
 

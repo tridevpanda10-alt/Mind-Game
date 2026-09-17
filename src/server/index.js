@@ -214,7 +214,7 @@ app.get('/api/me', requireAuth, (req, res) => {
 });
 
 // ── MATCH ROUTES ──────────────────────────────────────────────────────────
-const ALL_TYPES = ['pattern', 'sequence', 'matrix', 'deduction', 'conditional', 'number', 'operator', 'spatial', 'mastermind'];
+const ALL_TYPES = ['pattern', 'sequence', 'matrix', 'deduction', 'conditional', 'number', 'operator', 'spatial', 'mastermind', 'ordering', 'story'];
 const DIFFS = ['rookie', 'easy', 'medium', 'hard', 'expert', 'master'];
 
 function validTypes(v) {

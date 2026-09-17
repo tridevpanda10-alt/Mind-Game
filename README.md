@@ -32,7 +32,7 @@ UI (vanilla ES modules)  →  Game state (screens/*)  →  Puzzle engine
                                           SQLite (node:sqlite)
 ```
 
-- **Puzzle engine** (`src/server/puzzles/`): 9 generator types, each with a
+- **Puzzle engine** (`src/server/puzzles/`): 11 generator types, each with a
   brute-force or construct-then-verify uniqueness guarantee. Deterministic:
   the same seed always reproduces the same puzzle, which powers daily
   challenges and reproducible tests.
@@ -49,7 +49,7 @@ UI (vanilla ES modules)  →  Game state (screens/*)  →  Puzzle engine
 
 ## Game modes
 
-- **Training** — pick any of 9 reasoning types × 6 difficulties and a session
+- **Training** — pick any of 11 reasoning types × 6 difficulties and a session
   length (5–30 puzzles, default 10). No rating risk. No diamonds earned or
   spent.
 - **Quick Match / Ranked** — 12 mixed puzzles; server-computed score and

@@ -19,23 +19,25 @@ function display(op) {
   return op === '*' ? '×' : op === '/' ? '÷' : op;
 }
 
-// All operator pairs (o1, o2) such that "a o1 b o2 c" evaluates to d with
-// normal precedence (×,÷ before +,-).
+// Evaluate "a o1 b o2 c" with normal precedence (×,÷ before +,-).
+// NaN means the expression is undefined (non-exact division or ÷0).
+function evalPair(a, o1, b, o2, c) {
+  const hi1 = o1 === '*' || o1 === '/';
+  const hi2 = o2 === '*' || o2 === '/';
+  if (hi1 || !hi2) {
+    const v1 = applyOp(a, o1, b);
+    return applyOp(v1, o2, c);
+  }
+  const v2 = applyOp(b, o2, c);
+  return applyOp(a, o1, v2);
+}
+
+// All operator pairs (o1, o2) such that "a o1 b o2 c" evaluates to d.
 function solutions2(a, b, c, d) {
-  const ops = ['+', '-', '*', '/'];
   const found = [];
-  for (const o1 of ops) {
-    for (const o2 of ops) {
-      const hi1 = o1 === '*' || o1 === '/';
-      const hi2 = o2 === '*' || o2 === '/';
-      let lhs;
-      if (hi1 || !hi2) {
-        const v1 = applyOp(a, o1, b);
-        lhs = applyOp(v1, o2, c);
-      } else {
-        const v2 = applyOp(b, o2, c);
-        lhs = applyOp(a, o1, v2);
-      }
+  for (const o1 of ['+', '-', '*', '/']) {
+    for (const o2 of ['+', '-', '*', '/']) {
+      const lhs = evalPair(a, o1, b, o2, c);
       if (!Number.isNaN(lhs) && lhs === d) found.push([o1, o2]);
     }
   }
@@ -64,9 +66,27 @@ export function generateOperator(rng, difficulty) {
       const [o1, o2, d] = candidates[Math.floor(rng() * candidates.length)];
       if (solutions2(a, b, c, d).length !== 1) continue;
       const correct = `${display(o1)} and ${display(o2)}`;
-      const sym = ['+', '-', '×', '÷'].filter((s) => s !== display(o1) && s !== display(o2));
-      const opts = [correct, `${sym[0]} and ${sym[1]}`, `${sym[2]} and ${sym[0]}`, `${display(o1)} and ${sym[3]}`];
-      if (new Set(opts).size !== 4) continue;
+      // Distractors: three OTHER operator pairs, each provably wrong — the
+      // uniqueness check above guarantees no other pair evaluates to d.
+      // (The previous builder indexed a 2-element array with [2] and [3] and
+      // shipped literal "undefined" as an option — twice per puzzle.) Prefer
+      // pairs that evaluate to a real number (clean wrong answers) over
+      // division-NaN pairs, and never show the same pair twice.
+      const wrongPairs = [];
+      for (const p1 of ['+', '-', '*', '/']) {
+        for (const p2 of ['+', '-', '*', '/']) {
+          const label = `${display(p1)} and ${display(p2)}`;
+          if (label === correct) continue;
+          wrongPairs.push({ label, value: evalPair(a, p1, b, p2, c) });
+        }
+      }
+      const opts = [correct];
+      for (const wp of shuffledOptions(rng, wrongPairs).sort((x, y) => Number(Number.isFinite(y.value)) - Number(Number.isFinite(x.value)))) {
+        if (opts.length >= 4) break;
+        if (opts.includes(wp.label)) continue;
+        opts.push(wp.label);
+      }
+      if (opts.length < 4) continue;
       return {
         question: `Replace @ and # with operators to make this true: ${a} @ ${b} # ${c} = ${d}. Which pair works?`,
         options: shuffledOptions(rng, opts),
