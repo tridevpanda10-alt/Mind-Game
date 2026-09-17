@@ -137,9 +137,16 @@ partner; none is integrated.
   active skin's palette and shares it via the Web Share API (image where
   supported, text fallback, copy-to-clipboard last resort) — fully
   client-side, no server endpoint.
-- **Audio & haptics** — a generative ambient loop (Web Audio, no audio
-  files), sound cues, and Vibration-API taps, each with its own persisted
-  toggle (music / SFX / vibration) in Profile → Settings.
+- **Audio & haptics** — a real background track, "Thinking Music" by
+  Kevin MacLeod (incompetech.com), licensed CC BY 4.0, stored at
+  `src/public/audio/intense-theme.mp3` and looped via `<audio>`; Web-Audio
+  sound cues and Vibration-API taps each with their own persisted toggle
+  (music / SFX / vibration) in Profile → Settings.
+- **Intro animation** — "Magnifying Glass" by faisal qureshi, a free Lottie
+  animation (Lottie Simple License) stored at
+  `src/public/animations/intro.json`, played by the vendored lottie-web
+  library (`src/public/vendor/lottie-light.min.js`, MIT). Hidden under
+  `prefers-reduced-motion`; the skippable word sequence still plays.
 - **Per-difficulty backgrounds** — the match screen's backdrop shifts tone
   and motion with puzzle difficulty (calm greens at rookie → intense reds at
   master), layered *under* the active world-skin flourish so both compose.

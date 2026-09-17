@@ -1,8 +1,8 @@
 // App entry point: boot, splash, auth, navigation wiring, PWA registration.
 
 import { api, setToken, getToken, captureReferralFromUrl, getStoredReferral, clearStoredReferral } from './api.js';
-import { initAds } from './ads.js';
 import { $, $$, el, showScreen, toast, spinner } from './ui.js';
+import { initAds } from './ads.js';
 import { initTheme, initScheme, toggleScheme, validateActiveSkin, theme } from './theme.js';
 import { initAudioSettings, registerFirstGesture, vibrate } from './sfx.js';
 import { initGame, exitMatch, getState } from './screens/game.js';
@@ -14,27 +14,39 @@ import { goSkins } from './screens/skins.js';
 import { goCampaign } from './screens/campaign.js';
 
 // ── splash ────────────────────────────────────────────────────────────────
-// Cartoonish animated intro (Phase 8): a pure-CSS/SVG magnifying glass
-// sniffing out clues, then the themed word sequence. Skippable with any tap
-// or click (returning players shouldn't have to wait).
+// Real intro animation: "Magnifying Glass" by faisal qureshi, a free
+// Lottie animation (Lottie Simple License) stored locally as
+// /animations/intro.json and played by lottie-web (vendored, MIT). Any tap
+// still skips straight into the app.
+const INTRO_JSON_URL = '/animations/intro.json';
+let introAnim = null;
+
+function destroyIntroAnim() {
+  if (!introAnim) return;
+  try { introAnim.destroy(); } catch { /* already gone */ }
+  introAnim = null;
+}
+
 function playIntro(onDone) {
   const seq = $('#splashSeq');
   seq.replaceChildren();
 
-  const stage = el('div', { class: 'toon-stage', 'aria-hidden': 'true' });
-  stage.innerHTML = `
-    <div class="toon-floor"></div>
-    <svg class="toon-magnifier" viewBox="0 0 120 120">
-      <circle class="tm-lens" cx="50" cy="50" r="26" fill="rgba(76,201,240,0.12)" stroke="currentColor" stroke-width="7"/>
-      <line class="tm-handle" x1="69" y1="69" x2="102" y2="102" stroke="currentColor" stroke-width="11" stroke-linecap="round"/>
-      <circle class="tm-glint" cx="42" cy="42" r="6" fill="rgba(255,255,255,0.85)"/>
-    </svg>
-    <span class="toon-clue c1">?</span>
-    <span class="toon-clue c2">!</span>
-    <span class="toon-clue c3">🔑</span>
-    <span class="toon-zap" aria-hidden="true"></span>
-  `;
-  seq.append(stage);
+  // Lottie host: create + play the magnifying-glass animation once.
+  const host = $('#lottieStage');
+  host.replaceChildren();
+  try {
+    if (window.lottie) {
+      introAnim = window.lottie.loadAnimation({
+        container: host,
+        renderer: 'svg',
+        loop: false,
+        autoplay: true,
+        path: INTRO_JSON_URL,
+      });
+      introAnim.addEventListener('DOMLoaded', () => introAnim.goToAndPlay(0, true));
+    }
+  } catch { /* fail-open: the word sequence still plays without it */ }
+  if (!introAnim) host.classList.add('hidden');
 
   const words = theme.splash;
   words.forEach((w, i) => {
@@ -47,7 +59,7 @@ function playIntro(onDone) {
   seq.append(logo);
   const enter = el('button', { class: 'btn primary splash-enter', text: 'ENTER THE ARENA' });
   enter.style.animationDelay = `${0.9 + words.length * 0.75 + 0.5}s`;
-  enter.addEventListener('click', onDone);
+  enter.addEventListener('click', () => { cleanup(); onDone(); });
   seq.append(enter);
 
   // Skip: any tap/click on the intro (not on the enter button itself) jumps
@@ -66,6 +78,8 @@ function playIntro(onDone) {
   function cleanup() {
     $('#screen-splash').removeEventListener('click', skip);
     window.removeEventListener('keydown', keySkip);
+    destroyIntroAnim();
+    $('#lottieStage').replaceChildren();
   }
   $('#screen-splash').addEventListener('click', skip);
   window.addEventListener('keydown', keySkip);

@@ -1,7 +1,10 @@
-// Game-feel audio + haptics. Everything here is generated at runtime with the
-// Web Audio API — no audio files, no external assets, nothing copyrighted.
+// Game-feel audio + haptics. SFX (correct/incorrect/combo/tick) are still
+// generated at runtime with the Web Audio API; the background music is a REAL
+// track — "Thinking Music" by Kevin MacLeod (incompetech.com), licensed under
+// CC BY 4.0, stored locally as /audio/intense-theme.mp3 and streamed via an
+// <audio> element (looped, no external CDN, nothing copyrighted).
 // Three independent, client-only settings (persisted in localStorage):
-//   cra_music_enabled      — looping ambient track (default on)
+//   cra_music_enabled      — looping background track (default on)
 //   cra_sfx_enabled        — correct/incorrect cues (default on)
 //   cra_vibration_enabled  — short haptic pulses via the Vibration API (default on)
 // Every API call is feature-detected and fail-silent: unsupported browsers
@@ -113,55 +116,58 @@ export function playTick() {
   beep({ freq: 660, dur: 0.05, type: 'sine', gain: 0.04 });
 }
 
-// ── background music: tiny generative ambient loop (pentatonic, gentle) ───
-let musicNodes = null;
-let musicTimer = null;
-const SCALE = [220, 261.63, 293.66, 329.63, 392, 440]; // A minor pentatonic-ish
-let step = 0;
+// ── background music: real track, streamed + looped ────────────────────────
+// "Thinking Music" — Kevin MacLeod (incompetech.com), CC BY 4.0.
+const MUSIC_URL = '/audio/intense-theme.mp3';
+let musicEl = null;
+let musicUnavailable = false;
 
 function startMusic() {
-  if (!musicOn || musicNodes || typeof window === 'undefined') return;
+  if (!musicOn || musicUnavailable || typeof window === 'undefined') return;
   const c = ensureCtx();
-  if (!c) return;
-  if (c.state !== 'running') {
+  if (!c || c.state !== 'running') {
     // Not unlocked yet: registerFirstGesture() will call startMusic() again.
     return;
   }
-  const master = c.createGain();
-  master.gain.value = 0.045;
-  master.connect(c.destination);
-  musicNodes = { master };
-  // Sparse, slow arpeggio; the loop is scheduled note-by-note so it never
-  // drifts and can be stopped cleanly.
-  const tick = () => {
-    if (!musicNodes || !ctx) return;
+  if (!musicEl) {
     try {
-      const now = ctx.currentTime;
-      const f = SCALE[step % SCALE.length] * (step % 8 === 4 ? 2 : 1);
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = f;
-      g.gain.setValueAtTime(0.0001, now);
-      g.gain.exponentialRampToValueAtTime(1, now + 0.25);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + 1.6);
-      osc.connect(g).connect(master);
-      osc.start(now);
-      osc.stop(now + 1.7);
-      step++;
-    } catch { /* keep going */ }
-  };
-  tick();
-  musicTimer = setInterval(tick, 1250);
+      musicEl = new Audio(MUSIC_URL);
+      musicEl.loop = true;
+      musicEl.preload = 'auto';
+      musicEl.volume = 0.3;
+      musicEl.addEventListener('error', () => {
+        // Missing/corrupt file: give up quietly, SFX keep working.
+        musicUnavailable = true;
+        musicEl = null;
+      }, { once: true });
+    } catch {
+      musicUnavailable = true;
+      return;
+    }
+  }
+  const p = musicEl.play();
+  if (p && typeof p.catch === 'function') p.catch(() => { /* autoplay policy; retried on the next gesture */ });
 }
 
 function stopMusic() {
-  if (musicTimer) clearInterval(musicTimer);
-  musicTimer = null;
-  if (musicNodes) {
-    try { musicNodes.master.disconnect(); } catch { /* noop */ }
-    musicNodes = null;
+  if (musicEl) {
+    try { musicEl.pause(); } catch { /* noop */ }
   }
+}
+
+// Introspection helper (used by tests/verification; harmless in production):
+// reports what the music element is actually doing.
+export function getMusicDiagnostics() {
+  return {
+    enabled: musicOn,
+    unavailable: musicUnavailable,
+    hasElement: Boolean(musicEl),
+    src: musicEl ? musicEl.src : null,
+    loop: musicEl ? musicEl.loop : null,
+    paused: musicEl ? musicEl.paused : null,
+    currentTime: musicEl ? musicEl.currentTime : null,
+    readyState: musicEl ? musicEl.readyState : null,
+  };
 }
 
 // ── vibration (feature-detected; silently no-ops on desktop) ───────────────
