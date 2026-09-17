@@ -4,7 +4,8 @@ import { api, setToken, getToken, captureReferralFromUrl, getStoredReferral, cle
 import { $, $$, el, showScreen, toast, spinner } from './ui.js';
 import { initAds } from './ads.js';
 import { initTheme, initScheme, toggleScheme, validateActiveSkin, theme } from './theme.js';
-import { initAudioSettings, registerFirstGesture, vibrate } from './sfx.js';
+import { initAudioSettings, registerFirstGesture, vibrate, playClick } from './sfx.js';
+import { initMascot } from './mascot.js';
 import { initGame, exitMatch, getState } from './screens/game.js';
 import { initHome, goHome } from './screens/home.js';
 import { initTraining, goTraining } from './screens/training.js';
@@ -84,6 +85,21 @@ function playIntro(onDone) {
   $('#screen-splash').addEventListener('click', skip);
   window.addEventListener('keydown', keySkip);
 }
+
+// ── UI click sound: ONE delegated listener for the whole app ─────────────
+// Any click on a primary control (buttons, answer options, nav) plays the
+// short UI click at the SFX volume. Skip the splash screen so entering the
+// app isn't double-counted, and skip range inputs (the slider speaks for
+// itself). The listener lives here so screens never bind it individually.
+document.addEventListener('click', (e) => {
+  const t = e.target;
+  if (!(t instanceof Element)) return;
+  if (t.closest('#screen-splash')) return;
+  if (t.closest('button, .opt, [data-nav], [role=\'button\']')
+      && !t.closest('input[type=range]')) {
+    playClick();
+  }
+}, true);
 
 // ── service worker (PWA app shell only; API calls stay network-only) ──────
 function registerServiceWorker() {
@@ -222,6 +238,7 @@ async function boot() {
   registerServiceWorker();
   initAds(); // warm the ad provider (server-chosen); lazy-fallback otherwise
   registerFirstGesture(); // audio unlock on first tap (autoplay policy)
+  initMascot(); // decorative corner cat on home (lottie-web, reduced-motion aware)
 
   const hasToken = Boolean(getToken());
   playIntro(() => {

@@ -1,20 +1,46 @@
-// Game-feel audio + haptics. SFX (correct/incorrect/combo/tick) are still
-// generated at runtime with the Web Audio API; the background music is a REAL
-// track — "Thinking Music" by Kevin MacLeod (incompetech.com), licensed under
-// CC BY 4.0, stored locally as /audio/intense-theme.mp3 and streamed via an
-// <audio> element (looped, no external CDN, nothing copyrighted).
-// Three independent, client-only settings (persisted in localStorage):
-//   cra_music_enabled      — looping background track (default on)
-//   cra_sfx_enabled        — correct/incorrect cues (default on)
-//   cra_vibration_enabled  — short haptic pulses via the Vibration API (default on)
+// Game-feel audio + haptics. Background music is a REAL track — "Thinking
+// Music" by Kevin MacLeod (incompetech.com), CC BY 4.0, stored locally as
+// /audio/intense-theme.mp3 and streamed via an <audio> element (looped). The
+// UI click is Mixkit's free "Select click" (Mixkit License) stored as
+// /audio/click.mp3; the remaining cues are synthesized with the Web Audio API.
+// Volume model (all client-only, persisted in localStorage):
+//   cra_music_volume  — 0..100 background-music level (0 == off); migrating
+//                       from the old boolean cra_music_enabled (true → 70)
+//   cra_sfx_volume    — 0..100 for ALL short UI sounds: click, correct,
+//                       incorrect, combo, tick (0 == off)
+//   cra_vibration_enabled — short haptic pulses via the Vibration API (bool)
+// The two volumes are fully independent: muting one never affects the other.
 // Every API call is feature-detected and fail-silent: unsupported browsers
 // (and autoplay-blocking policies) must never throw.
 
-const MUSIC_KEY = 'cra_music_enabled';
-const SFX_KEY = 'cra_sfx_enabled';
+const MUSIC_VOLUME_KEY = 'cra_music_volume';
+const LEGACY_MUSIC_KEY = 'cra_music_enabled'; // pre-slider boolean; migrated once
+const SFX_VOLUME_KEY = 'cra_sfx_volume';
 const VIBRATION_KEY = 'cra_vibration_enabled';
+const MUSIC_URL = '/audio/intense-theme.mp3';
+const CLICK_URL = '/audio/click.mp3';
 
-function stored(key, fallback) {
+function storedNumber(key, fallback, { legacyBoolKey = null, legacyTrue = fallback, legacyFalse = 0 } = {}) {
+  try {
+    const v = localStorage.getItem(key);
+    if (v !== null) {
+      const n = Number(v);
+      if (Number.isFinite(n)) return Math.min(100, Math.max(0, Math.round(n)));
+    }
+    // Migration: an older session stored a boolean instead of a level.
+    if (legacyBoolKey) {
+      const old = localStorage.getItem(legacyBoolKey);
+      if (old !== null) return old === '1' ? legacyTrue : legacyFalse;
+    }
+  } catch { /* storage unavailable */ }
+  return fallback;
+}
+
+function storeNumber(key, value) {
+  try { localStorage.setItem(key, String(Math.min(100, Math.max(0, Math.round(value))))); } catch { /* unavailable */ }
+}
+
+function storedBool(key, fallback) {
   try {
     const v = localStorage.getItem(key);
     if (v === null) return fallback;
@@ -22,31 +48,48 @@ function stored(key, fallback) {
   } catch { return fallback; }
 }
 
-function store(key, value) {
+function storeBool(key, value) {
   try { localStorage.setItem(key, value ? '1' : '0'); } catch { /* unavailable */ }
 }
 
-// ── settings accessors ─────────────────────────────────────────────────────
-let musicOn = true;
-let sfxOn = true;
+// ── settings state ──────────────────────────────────────────────────────────
+let musicVolume = 70; // 0..100
+let sfxVolume = 70;   // 0..100
 let vibrationOn = true;
 
-export function getMusicEnabled() { return musicOn; }
-export function getSfxEnabled() { return sfxOn; }
+export function getMusicVolume() { return musicVolume; }
+export function getSfxVolume() { return sfxVolume; }
 export function getVibrationEnabled() { return vibrationOn; }
 
-export function setMusicEnabled(on) {
-  musicOn = Boolean(on);
-  store(MUSIC_KEY, musicOn);
-  if (musicOn) startMusic(); else stopMusic();
+export function setMusicVolume(level) {
+  musicVolume = Math.min(100, Math.max(0, Math.round(Number(level) || 0)));
+  storeNumber(MUSIC_VOLUME_KEY, musicVolume);
+  applyMusicVolume();
+  if (musicVolume > 0) startMusic(); else stopMusic();
 }
-export function setSfxEnabled(on) { sfxOn = Boolean(on); store(SFX_KEY, sfxOn); }
-export function setVibrationEnabled(on) { vibrationOn = Boolean(on); store(VIBRATION_KEY, vibrationOn); }
+
+export function setSfxVolume(level) {
+  sfxVolume = Math.min(100, Math.max(0, Math.round(Number(level) || 0)));
+  storeNumber(SFX_VOLUME_KEY, sfxVolume);
+  if (clickEl) clickEl.volume = (sfxVolume / 100) * CLICK_GAIN;
+}
+
+// Back-compat boolean shims (legacy callers/third-party probes): true == >0.
+export function getMusicEnabled() { return musicVolume > 0; }
+export function getSfxEnabled() { return sfxVolume > 0; }
+export function setMusicEnabled(on) { setMusicVolume(on ? (musicVolume > 0 ? musicVolume : 70) : 0); }
+export function setSfxEnabled(on) { setSfxVolume(on ? (sfxVolume > 0 ? sfxVolume : 70) : 0); }
+
+export function setVibrationEnabled(on) { vibrationOn = Boolean(on); storeBool(VIBRATION_KEY, vibrationOn); }
 
 export function initAudioSettings() {
-  musicOn = stored(MUSIC_KEY, true);
-  sfxOn = stored(SFX_KEY, true);
-  vibrationOn = stored(VIBRATION_KEY, true);
+  musicVolume = storedNumber(MUSIC_VOLUME_KEY, 70, {
+    legacyBoolKey: LEGACY_MUSIC_KEY, legacyTrue: 70, legacyFalse: 0,
+  });
+  sfxVolume = storedNumber(SFX_VOLUME_KEY, 70);
+  vibrationOn = storedBool(VIBRATION_KEY, true);
+  // Migration done: drop the legacy boolean so it can't resurface later.
+  try { localStorage.removeItem(LEGACY_MUSIC_KEY); } catch { /* noop */ }
 }
 
 // ── audio context (lazily created; unlocked by the first user gesture) ─────
@@ -73,7 +116,7 @@ function resumeCtx() {
 export function registerFirstGesture() {
   const unlock = () => {
     resumeCtx();
-    if (ctxUnlocked && musicOn) startMusic();
+    if (ctxUnlocked && musicVolume > 0) startMusic();
     window.removeEventListener('pointerdown', unlock);
     window.removeEventListener('keydown', unlock);
   };
@@ -81,8 +124,9 @@ export function registerFirstGesture() {
   window.addEventListener('keydown', unlock, { once: false });
 }
 
+// ── short synthesized cues (gated by the SFX volume) ───────────────────────
 function beep({ freq = 440, dur = 0.12, type = 'sine', gain = 0.08, sweepTo = null }) {
-  if (!sfxOn) return;
+  if (sfxVolume <= 0) return;
   const c = ensureCtx();
   if (!c || c.state !== 'running') return;
   try {
@@ -91,7 +135,7 @@ function beep({ freq = 440, dur = 0.12, type = 'sine', gain = 0.08, sweepTo = nu
     osc.type = type;
     osc.frequency.setValueAtTime(freq, c.currentTime);
     if (sweepTo) osc.frequency.exponentialRampToValueAtTime(sweepTo, c.currentTime + dur);
-    g.gain.setValueAtTime(gain, c.currentTime);
+    g.gain.setValueAtTime(gain * (sfxVolume / 100), c.currentTime);
     g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + dur);
     osc.connect(g).connect(c.destination);
     osc.start();
@@ -111,19 +155,47 @@ export function sfxCombo() {
   beep({ freq: 659.25, dur: 0.07, type: 'square', gain: 0.05 });
   setTimeout(() => beep({ freq: 987.77, dur: 0.1, type: 'square', gain: 0.05 }), 70);
 }
-// Tiny confirmation click for settings toggles.
+
+// ── UI click: real sample (Mixkit "Select click"), replayable ──────────────
+let clickEl = null;
+let clickUnavailable = false;
+const CLICK_GAIN = 0.5; // headroom so the sample never clips at 100%
+
+export function playClick() {
+  if (sfxVolume <= 0 || clickUnavailable || typeof window === 'undefined') return;
+  const c = ensureCtx();
+  if (!c || c.state !== 'running') return; // pre-gesture: stay silent, never throw
+  try {
+    if (!clickEl) {
+      clickEl = new Audio(CLICK_URL);
+      clickEl.preload = 'auto';
+      clickEl.addEventListener('error', () => {
+        clickUnavailable = true;
+        clickEl = null;
+      }, { once: true });
+    }
+    clickEl.volume = (sfxVolume / 100) * CLICK_GAIN;
+    clickEl.currentTime = 0; // restart even if the previous play is tailing off
+    const p = clickEl.play();
+    if (p && typeof p.catch === 'function') p.catch(() => { /* fail silent */ });
+  } catch { /* never break a click */ }
+}
+
+// Kept for the earlier settings UI: a tick is now the synthesized combo blip.
 export function playTick() {
   beep({ freq: 660, dur: 0.05, type: 'sine', gain: 0.04 });
 }
 
-// ── background music: real track, streamed + looped ────────────────────────
-// "Thinking Music" — Kevin MacLeod (incompetech.com), CC BY 4.0.
-const MUSIC_URL = '/audio/intense-theme.mp3';
+// ── background music: real track, streamed + looped, volume-scaled ─────────
 let musicEl = null;
 let musicUnavailable = false;
 
+function applyMusicVolume() {
+  if (musicEl) musicEl.volume = musicVolume / 100;
+}
+
 function startMusic() {
-  if (!musicOn || musicUnavailable || typeof window === 'undefined') return;
+  if (musicVolume <= 0 || musicUnavailable || typeof window === 'undefined') return;
   const c = ensureCtx();
   if (!c || c.state !== 'running') {
     // Not unlocked yet: registerFirstGesture() will call startMusic() again.
@@ -134,7 +206,6 @@ function startMusic() {
       musicEl = new Audio(MUSIC_URL);
       musicEl.loop = true;
       musicEl.preload = 'auto';
-      musicEl.volume = 0.3;
       musicEl.addEventListener('error', () => {
         // Missing/corrupt file: give up quietly, SFX keep working.
         musicUnavailable = true;
@@ -145,6 +216,7 @@ function startMusic() {
       return;
     }
   }
+  applyMusicVolume();
   const p = musicEl.play();
   if (p && typeof p.catch === 'function') p.catch(() => { /* autoplay policy; retried on the next gesture */ });
 }
@@ -155,24 +227,25 @@ function stopMusic() {
   }
 }
 
-// Introspection helper (used by tests/verification; harmless in production):
-// reports what the music element is actually doing.
-export function getMusicDiagnostics() {
-  return {
-    enabled: musicOn,
-    unavailable: musicUnavailable,
-    hasElement: Boolean(musicEl),
-    src: musicEl ? musicEl.src : null,
-    loop: musicEl ? musicEl.loop : null,
-    paused: musicEl ? musicEl.paused : null,
-    currentTime: musicEl ? musicEl.currentTime : null,
-    readyState: musicEl ? musicEl.readyState : null,
-  };
-}
-
 // ── vibration (feature-detected; silently no-ops on desktop) ───────────────
 export function vibrate(pattern) {
   if (!vibrationOn) return;
   if (typeof navigator === 'undefined' || !('vibrate' in navigator)) return;
   try { navigator.vibrate(pattern); } catch { /* unsupported */ }
+}
+
+// Introspection helper (used by verification; harmless in production).
+export function getMusicDiagnostics() {
+  return {
+    musicVolume,
+    sfxVolume,
+    unavailable: musicUnavailable,
+    hasElement: Boolean(musicEl),
+    src: musicEl ? musicEl.src : null,
+    loop: musicEl ? musicEl.loop : null,
+    paused: musicEl ? musicEl.paused : null,
+    volume: musicEl ? musicEl.volume : null,
+    currentTime: musicEl ? musicEl.currentTime : null,
+    readyState: musicEl ? musicEl.readyState : null,
+  };
 }

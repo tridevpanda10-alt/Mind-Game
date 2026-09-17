@@ -139,14 +139,22 @@ partner; none is integrated.
   client-side, no server endpoint.
 - **Audio & haptics** — a real background track, "Thinking Music" by
   Kevin MacLeod (incompetech.com), licensed CC BY 4.0, stored at
-  `src/public/audio/intense-theme.mp3` and looped via `<audio>`; Web-Audio
-  sound cues and Vibration-API taps each with their own persisted toggle
-  (music / SFX / vibration) in Profile → Settings.
+  `src/public/audio/intense-theme.mp3` and looped via `<audio>`; the UI click
+  is Mixkit's free "Select click" (`src/public/audio/click.mp3`, Mixkit
+  License); Web-Audio cues and Vibration-API taps round it out. Music and
+  sound effects each have their own persisted 0–100 volume slider
+  (`cra_music_volume` / `cra_sfx_volume`, fully independent); vibration is a
+  plain toggle in Profile → Settings.
 - **Intro animation** — "Magnifying Glass" by faisal qureshi, a free Lottie
   animation (Lottie Simple License) stored at
   `src/public/animations/intro.json`, played by the vendored lottie-web
   library (`src/public/vendor/lottie-light.min.js`, MIT). Hidden under
   `prefers-reduced-motion`; the skippable word sequence still plays.
+- **Corner mascot** — a small looping cat idle ("gatin", from the
+  MIT-licensed lottie-web demo set, `src/public/animations/mascot.json`)
+  fixed to the home screen's bottom-right corner at 55% opacity with
+  `pointer-events: none`, so it never blocks anything; frozen on frame 0
+  under `prefers-reduced-motion`.
 - **Per-difficulty backgrounds** — the match screen's backdrop shifts tone
   and motion with puzzle difficulty (calm greens at rookie → intense reds at
   master), layered *under* the active world-skin flourish so both compose.

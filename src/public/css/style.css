@@ -676,6 +676,32 @@ body.skin-treasure .invite-card {
 @keyframes diff-calm { from { transform: scale(1); } to { transform: scale(1.06); } }
 @keyframes diff-intense { from { transform: scale(1.02); opacity: 0.55; } to { transform: scale(1.09); opacity: 0.8; } }
 
+/* ── settings sliders (music / SFX volume) ─────────────────────────── */
+.slider-row .slider-controls { display: flex; align-items: center; gap: 8px; min-width: 180px; }
+.slider-row input[type='range'] { flex: 1; accent-color: var(--accent, #4cc9f0); height: 22px; cursor: pointer; }
+.slider-row .slider-val { min-width: 38px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ── corner mascot: decorative only — never intercepts clicks ──────── */
+/* Fixed to the viewport's bottom-right so it stays visible regardless of
+   scroll; lifted above the mobile bottom-nav bar (76px) and tucked clear of
+   the desktop sidebar (nav < 900px content column is centered). */
+.mascot {
+  position: fixed;
+  right: 12px;
+  bottom: 86px;
+  width: 84px;
+  height: 84px;
+  opacity: 0.55;
+  pointer-events: none;
+  user-select: none;
+  z-index: 30;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
+}
+.mascot svg { width: 100%; height: 100%; display: block; }
+@media (min-width: 900px) {
+  .mascot { bottom: 10px; }
+}
+
 /* ── intro: real Lottie animation ("Magnifying Glass" by faisal qureshi,
    Lottie Simple License, via lottie-web). Rendered into a sized SVG host. ── */
 .lottie-stage { width: min(64vw, 240px); height: min(64vw, 240px); margin: 0 auto 4px; }
@@ -691,6 +717,7 @@ body.skin-treasure .invite-card {
   .confetti-host { display: none; }
   .game-meta .pill.boss-badge { animation: none; }
   .game-stage::before { animation: none !important; }
+  .mascot { opacity: 0.45; } /* mascot frozen on frame 0 by mascot.js */
   .lottie-stage { display: none; } /* motion off: hide the animation, keep the sequence */
 }
 @keyframes combo-rise-static {

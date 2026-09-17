@@ -3,7 +3,7 @@
 import { api } from '../api.js';
 import { $, el, showScreen, fmtMs, pct } from '../ui.js';
 import { getScheme, toggleScheme } from '../theme.js';
-import { getMusicEnabled, setMusicEnabled, getSfxEnabled, setSfxEnabled, getVibrationEnabled, setVibrationEnabled, playTick } from '../sfx.js';
+import { getMusicVolume, setMusicVolume, getSfxVolume, setSfxVolume, getVibrationEnabled, setVibrationEnabled } from '../sfx.js';
 
 const TYPE_NAMES = {
   pattern: 'Pattern', sequence: 'Sequence', matrix: 'Matrix', deduction: 'Deduction',
@@ -91,8 +91,10 @@ export async function goProfile() {
   }
 }
 
-// Settings card: color scheme + audio/vibration toggles (Phase 7) — one
-// panel, all client-side, persisted per browser, safe on unsupported devices.
+// Settings card: color scheme + audio sliders + vibration toggle. Music and
+// SFX each get their own 0–100 volume slider (0 == off); they are fully
+// independent — muting one never touches the other. Vibration stays a plain
+// on/off toggle (intensity is not requested and not meaningful per-device).
 function buildSchemeCard() {
   const card = el('div', { class: 'card' }, el('h3', { text: 'Settings' }));
 
@@ -110,16 +112,37 @@ function buildSchemeCard() {
   ));
 
   const settingsGrid = el('div', { class: 'settings-grid' });
+  const slider = (label, get, set, hint) => {
+    const val = el('span', { class: 'sub slider-val', text: `${get()}%` });
+    const input = el('input', {
+      type: 'range', min: '0', max: '100', step: '1', value: String(get()),
+      'aria-label': `${label} volume`,
+    });
+    input.addEventListener('input', () => {
+      set(Number(input.value)); // live: adjusts playback with no reload
+      val.textContent = `${input.value}%`;
+    });
+    settingsGrid.append(
+      el('div', { class: 'setting-row slider-row' },
+        el('div', {},
+          el('strong', { text: label }),
+          el('span', { class: 'sub', text: hint }),
+        ),
+        el('div', { class: 'slider-controls' }, input, val),
+      ),
+    );
+  };
+  slider('Music', getMusicVolume, setMusicVolume, 'Background loop while you play — 0 is off');
+  slider('Sound effects', getSfxVolume, setSfxVolume, 'Clicks and correct/incorrect cues — 0 is off');
   const toggle = (label, get, set, hint) => {
     const btn = el('button', {
       class: `diff-btn toggle${get() ? ' on' : ''}`, type: 'button',
-      text: `${get() ? '🔊' : '🔇'} ${label}: ${get() ? 'On' : 'Off'}`,
+      text: `${get() ? '✅' : '⬜'} ${label}: ${get() ? 'On' : 'Off'}`,
     });
     btn.addEventListener('click', () => {
       set(!get());
-      btn.textContent = `${get() ? '🔊' : '🔇'} ${label}: ${get() ? 'On' : 'Off'}`;
+      btn.textContent = `${get() ? '✅' : '⬜'} ${label}: ${get() ? 'On' : 'Off'}`;
       btn.classList.toggle('on', get());
-      playTick(); // audible confirmation (respects the new SFX setting)
     });
     settingsGrid.append(
       el('div', { class: 'setting-row' },
@@ -131,8 +154,6 @@ function buildSchemeCard() {
       ),
     );
   };
-  toggle('Music', getMusicEnabled, setMusicEnabled, 'Ambient loop while you play');
-  toggle('Sound effects', getSfxEnabled, setSfxEnabled, 'Correct / incorrect cues');
   toggle('Vibration', getVibrationEnabled, setVibrationEnabled, 'Haptic taps on supported phones');
   card.append(settingsGrid);
   return card;
