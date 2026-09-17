@@ -3,7 +3,7 @@
 // challenges) are enforced where these functions are called, not here —
 // this module stays pure and unit-testable.
 
-export const MODES = { TRAINING: 'training', QUICK: 'quick', DAILY: 'daily', TOURNAMENT: 'tournament' };
+export const MODES = { TRAINING: 'training', QUICK: 'quick', DAILY: 'daily', TOURNAMENT: 'tournament', CAMPAIGN: 'campaign' };
 
 export const XP_PER_LEVEL = 500;
 export function levelForXp(xp) {
@@ -33,8 +33,11 @@ export function streakMultiplier(streak) {
   return Math.min(1.5, 1 + 0.05 * Math.max(0, streak));
 }
 
-export function scoreMatch(results) {
+export function scoreMatch(results, opts = {}) {
   // results: [{ difficulty, msTaken, correct, parMs }]
+  // opts.combo (game-feel pack): when true, per-puzzle points ride the live
+  // streak multiplier — 3-streak ≈ ×1.1, 5-streak ≈ ×1.2, capped at ×1.5.
+  // A modest spice on top of the base scale; it can never dominate it.
   let score = 0;
   let streak = 0;
   for (const r of results) {
@@ -47,7 +50,24 @@ export function scoreMatch(results) {
     const pts = pointsForPuzzle(r.difficulty, r.msTaken, r.parMs);
     score += Math.round(pts * streakMultiplier(streak - 1));
   }
-  return Math.max(0, score);
+  if (!opts.combo) return Math.max(0, score);
+  return Math.max(0, score + comboBonus(results));
+}
+
+// Combo bonus: small additive share of base points per correct answer that
+// scales with how deep the run is — roughly +10% by a 3-streak, +20% by 5.
+function comboBonus(results) {
+  let streak = 0;
+  let bonus = 0;
+  for (const r of results) {
+    if (!r.correct) {
+      streak = 0;
+      continue;
+    }
+    streak++;
+    if (streak >= 2) bonus += Math.round((BASE_POINTS[r.difficulty] ?? 100) * Math.min(0.5, 0.05 * (streak - 1)));
+  }
+  return bonus;
 }
 
 export function xpForMatch(results, mode) {

@@ -4,31 +4,71 @@ import { api, setToken, getToken, captureReferralFromUrl, getStoredReferral, cle
 import { initAds } from './ads.js';
 import { $, $$, el, showScreen, toast, spinner } from './ui.js';
 import { initTheme, initScheme, toggleScheme, validateActiveSkin, theme } from './theme.js';
+import { initAudioSettings, registerFirstGesture, vibrate } from './sfx.js';
 import { initGame, exitMatch, getState } from './screens/game.js';
 import { initHome, goHome } from './screens/home.js';
 import { initTraining, goTraining } from './screens/training.js';
 import { initLeaderboard, goLeaderboard } from './screens/leaderboard.js';
 import { goProfile } from './screens/profile.js';
 import { goSkins } from './screens/skins.js';
+import { goCampaign } from './screens/campaign.js';
 
 // ── splash ────────────────────────────────────────────────────────────────
-function playSplash(onDone) {
+// Cartoonish animated intro (Phase 8): a pure-CSS/SVG magnifying glass
+// sniffing out clues, then the themed word sequence. Skippable with any tap
+// or click (returning players shouldn't have to wait).
+function playIntro(onDone) {
   const seq = $('#splashSeq');
   seq.replaceChildren();
+
+  const stage = el('div', { class: 'toon-stage', 'aria-hidden': 'true' });
+  stage.innerHTML = `
+    <div class="toon-floor"></div>
+    <svg class="toon-magnifier" viewBox="0 0 120 120">
+      <circle class="tm-lens" cx="50" cy="50" r="26" fill="rgba(76,201,240,0.12)" stroke="currentColor" stroke-width="7"/>
+      <line class="tm-handle" x1="69" y1="69" x2="102" y2="102" stroke="currentColor" stroke-width="11" stroke-linecap="round"/>
+      <circle class="tm-glint" cx="42" cy="42" r="6" fill="rgba(255,255,255,0.85)"/>
+    </svg>
+    <span class="toon-clue c1">?</span>
+    <span class="toon-clue c2">!</span>
+    <span class="toon-clue c3">🔑</span>
+    <span class="toon-zap" aria-hidden="true"></span>
+  `;
+  seq.append(stage);
+
   const words = theme.splash;
   words.forEach((w, i) => {
     const s = el('div', { class: 'splash-word', text: w });
-    s.style.animationDelay = `${i * 1.05}s`;
+    s.style.animationDelay = `${0.9 + i * 0.75}s`;
     seq.append(s);
   });
   const logo = el('div', { class: 'splash-logo', text: 'MIND GAME — REASONING ARENA' });
-  logo.style.animationDelay = '3.2s';
+  logo.style.animationDelay = `${0.9 + words.length * 0.75}s`;
   seq.append(logo);
   const enter = el('button', { class: 'btn primary splash-enter', text: 'ENTER THE ARENA' });
-  enter.style.animationDelay = '4.1s';
+  enter.style.animationDelay = `${0.9 + words.length * 0.75 + 0.5}s`;
   enter.addEventListener('click', onDone);
   seq.append(enter);
-  // auto-advance for reduced-motion users is handled by CSS near-instant animations
+
+  // Skip: any tap/click on the intro (not on the enter button itself) jumps
+  // straight to the app; keyboard users can press Enter.
+  const skip = (e) => {
+    if (e.target === enter || enter.contains(e.target)) return;
+    cleanup();
+    onDone();
+  };
+  const keySkip = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      cleanup();
+      onDone();
+    }
+  };
+  function cleanup() {
+    $('#screen-splash').removeEventListener('click', skip);
+    window.removeEventListener('keydown', keySkip);
+  }
+  $('#screen-splash').addEventListener('click', skip);
+  window.addEventListener('keydown', keySkip);
 }
 
 // ── service worker (PWA app shell only; API calls stay network-only) ──────
@@ -100,8 +140,10 @@ function initAuth() {
 function initNav() {
   $$('[data-nav]').forEach((b) => b.addEventListener('click', () => {
     const dest = b.dataset.nav;
+    vibrate(15);
     if (dest === 'home') goHome();
     else if (dest === 'play') goTraining();
+    else if (dest === 'campaign') goCampaign();
     else if (dest === 'leaderboard') goLeaderboard();
     else if (dest === 'skins') goSkins();
     else if (dest === 'profile') goProfile();
@@ -155,6 +197,7 @@ async function claimDailyLoginBonus() {
 async function boot() {
   initScheme(); // dark/light restored BEFORE first paint (no scheme flash)
   initTheme(); // restore saved skin locally; ownership re-checked below
+  initAudioSettings(); // music/sfx/vibration preferences
   initAuth();
   initNav();
   initHome();
@@ -164,9 +207,10 @@ async function boot() {
   restoreMatch();
   registerServiceWorker();
   initAds(); // warm the ad provider (server-chosen); lazy-fallback otherwise
+  registerFirstGesture(); // audio unlock on first tap (autoplay policy)
 
   const hasToken = Boolean(getToken());
-  playSplash(() => {
+  playIntro(() => {
     if (hasToken) {
       enterApp();
     } else {

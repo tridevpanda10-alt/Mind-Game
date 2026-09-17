@@ -378,6 +378,43 @@ export function initScheme() {
   return scheme;
 }
 
+// Campaign-mode labels per skin (game-feel pack). Kept here so skins own
+// their story everywhere: map, boss cases, intro, and verdicts.
+const CAMPAIGN_LABELS = {
+  detective: {
+    mapTitle: 'The Case Board',
+    mapBody: 'Cases unlock in order. Finish a case to open the next.',
+    bossLabel: 'Master Case',
+    bossBody: 'Master Case: no hints, tighter clocks.',
+    caseLabel: (n) => `Case #${String(n).padStart(3, '0')}`,
+    beginButton: 'Open the Case',
+    modeLabel: 'Case Board',
+  },
+  space: {
+    mapTitle: 'The Star Chart',
+    mapBody: 'Missions unlock in sequence. Complete one to plot the next jump.',
+    bossLabel: 'Black-Star Mission',
+    bossBody: 'Black-Star Mission: no assists, tighter windows.',
+    caseLabel: (n) => `Mission #${String(n).padStart(3, '0')}`,
+    beginButton: 'Launch',
+    modeLabel: 'Star Chart',
+  },
+  treasure: {
+    mapTitle: 'The Island Chart',
+    mapBody: 'Legs unlock in order. Finish one leg to chart the next.',
+    bossLabel: 'Legend Chest',
+    bossBody: 'Legend Chest: no hints, shorter tide.',
+    caseLabel: (n) => `Leg #${String(n).padStart(3, '0')}`,
+    beginButton: 'Set Sail',
+    modeLabel: 'Island Chart',
+  },
+};
+
+export function campaignTheme() {
+  const id = theme.id;
+  return CAMPAIGN_LABELS[id] ?? CAMPAIGN_LABELS.detective;
+}
+
 // Compatibility exports (older call sites): matchTheme(mode) etc.
 export function matchTheme(mode) {
   return theme.matchTypes[mode] ?? theme.matchTypes.quick;

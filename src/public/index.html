@@ -59,6 +59,7 @@
         <nav aria-label="Main">
           <button class="nav-btn" data-nav="home">Home</button>
           <button class="nav-btn" data-nav="play">Play</button>
+          <button class="nav-btn" data-nav="campaign">Cases</button>
           <button class="nav-btn" data-nav="leaderboard">Ranking</button>
           <button class="nav-btn" data-nav="skins">Skins</button>
           <button class="nav-btn" data-nav="profile">Profile</button>
@@ -113,6 +114,12 @@
               <p id="trainingDesc">Pick a reasoning skill and difficulty. No rating risk.</p>
               <button class="btn ghost" data-action="training">Enter Training</button>
             </article>
+            <article class="card mode-card campaign-card-home">
+              <h3 id="homeCampaignTitle">Case Board</h3>
+              <p id="homeCampaignDesc">Numbered cases that unlock in order. How far can you get?</p>
+              <div class="row"><span class="pill" id="campaignPill">Loading…</span></div>
+              <button class="btn" data-action="campaign">Open Case Board</button>
+            </article>
           </div>
           <div class="card invite-card">
             <h3>Invite a friend</h3>
@@ -151,36 +158,52 @@
           </div>
         </section>
 
+        <!-- CAMPAIGN MAP -->
+        <section id="screen-campaign" class="screen hidden" aria-label="Campaign map">
+          <header class="screen-head"><h2 id="campaignTitle">Case Board</h2></header>
+          <p class="sub" id="campaignSub"></p>
+          <div id="campaignBody" class="campaign-wrap"></div>
+        </section>
+
         <!-- GAME -->
         <section id="screen-game" class="screen hidden" aria-label="Puzzle">
-          <header class="game-head">
-            <button class="btn ghost small" id="exitMatch">Exit</button>
-            <div class="game-meta">
-              <span id="gameMode" class="pill"></span>
-              <span id="gameProgress"></span>
-              <span id="gameType" class="pill subtle"></span>
-              <span id="gameDiff" class="pill subtle"></span>
+          <div class="game-stage" id="gameStage">
+            <header class="game-head">
+              <button class="btn ghost small" id="exitMatch">Exit</button>
+              <div class="game-meta">
+                <span id="gameMode" class="pill"></span>
+                <span id="gameProgress"></span>
+                <span id="gameType" class="pill subtle"></span>
+                <span id="gameDiff" class="pill subtle"></span>
+              </div>
+              <div class="hud-right">
+                <div id="livesWrap" class="lives" aria-label="Lives remaining" hidden></div>
+                <div id="streakChip" class="streak-chip" hidden><span id="streakCount"></span></div>
+                <div class="timer" id="gameTimer" role="timer" aria-label="Time remaining">0:00</div>
+              </div>
+            </header>
+            <div class="timer-bar-wrap" aria-hidden="true"><div class="timer-bar" id="timerBar"></div></div>
+            <div id="comboHost" class="combo-host" aria-live="polite"></div>
+            <div class="game-body">
+              <p class="question" id="qText"></p>
+              <div id="qVisual"></div>
+              <div id="options" class="options"></div>
+              <div id="answerInputWrap" class="hidden">
+                <input type="text" id="answerInput" maxlength="64" autocomplete="off" />
+              </div>
             </div>
-            <div class="timer" id="gameTimer" role="timer" aria-label="Elapsed time">0:00</div>
-          </header>
-          <div class="game-body">
-            <p class="question" id="qText"></p>
-            <div id="qVisual"></div>
-            <div id="options" class="options"></div>
-            <div id="answerInputWrap" class="hidden">
-              <input type="text" id="answerInput" maxlength="64" autocomplete="off" />
-            </div>
+            <footer class="game-foot">
+              <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
+              <div class="row gap">
+                <button class="btn subtle" id="hintBtn" type="button">Use Hint (5 💎)</button>
+                <button class="btn subtle" id="skipBtn" type="button">Skip Clue (15 💎)</button>
+                <button class="btn subtle" id="freezeBtn" type="button">Freeze Time (10 💎)</button>
+              </div>
+              <button class="btn primary" id="submitBtn">Submit</button>
+              <button class="btn primary" id="nextBtn" hidden>Next puzzle</button>
+              <button class="btn primary" id="finishBtn" hidden>See results</button>
+            </footer>
           </div>
-          <footer class="game-foot">
-            <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
-            <div class="row gap">
-              <button class="btn subtle" id="hintBtn" type="button">Use Hint (5 💎)</button>
-              <button class="btn subtle" id="skipBtn" type="button">Skip Clue (15 💎)</button>
-            </div>
-            <button class="btn primary" id="submitBtn">Submit</button>
-            <button class="btn primary" id="nextBtn" hidden>Next puzzle</button>
-            <button class="btn primary" id="finishBtn" hidden>See results</button>
-          </footer>
         </section>
 
         <!-- RESULTS -->
@@ -222,6 +245,7 @@
     <nav class="bottom-nav" aria-label="Mobile navigation">
       <button class="bnav" data-nav="home">Home</button>
       <button class="bnav" data-nav="play">Play</button>
+      <button class="bnav" data-nav="campaign">Cases</button>
       <button class="bnav" data-nav="leaderboard">Ranking</button>
       <button class="bnav" data-nav="skins">Skins</button>
       <button class="bnav" data-nav="profile">Profile</button>

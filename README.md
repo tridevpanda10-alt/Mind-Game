@@ -80,8 +80,9 @@ balance.
   bonus (once per calendar day, auto-claimed), +5 per watched rewarded ad
   (max 5/day), +20 referral bonus when an invited friend finishes their first
   match.
-- **Spend:** 5 💎 hint (eliminates one wrong option, max 1 per puzzle),
-  15 💎 skip (one per match, scored as incorrect), 25 💎 tournament entry.
+- **Spend:** 5 💎 hint (eliminates one wrong option, max 1 per puzzle; disabled
+  on boss cases), 15 💎 skip (one per match, scored as incorrect),
+  10 💎 Freeze Time (pauses the visible countdown for 10s), 25 💎 tournament entry.
 - **Ledger:** every mutation is written to an `economy_log` table for audit
   and daily-quota enforcement.
 
@@ -106,6 +107,42 @@ Every registered player gets a shareable invite link
 signup — to discourage fake-account farming. An `<!-- AFFILIATE_SLOT -->`
 placeholder is reserved in the home markup for a future approved affiliate
 partner; none is integrated.
+
+## Game feel (stakes, feedback, progression)
+
+- **Lives** — competitive matches (quick/daily/tournament) start with 3
+  hearts, tracked and decremented **server-side**. The third wrong answer
+  ends the match immediately as `failed` (distinct from `completed`):
+  no further puzzles, no score payout, results remain viewable as a
+  post-mortem. Training and campaign are lives-exempt by design.
+- **Combo** — a per-match live streak feeds a small server-computed bonus
+  (≈+10% by a 3-streak, ≈+20% by 5, capped at +50%); one wrong answer or a
+  skip resets it. The client only displays the streak the server reports.
+- **Countdown + Freeze Time** — each puzzle shows a display-only countdown
+  from its par time (tighter, 60%, on boss cases); real `msTaken` still
+  accrues server-side. Freeze Time (10 💎, server-validated like any spend)
+  pauses the visible countdown for 10 seconds.
+- **Campaign** — 50 numbered cases unlocking strictly in order
+  (`GET /api/campaign`, `POST /api/campaign/start`). Only *finishing* a case
+  advances the pointer; failed attempts burn an attempt but never unlock the
+  next case (completed cases stay replayable). Difficulty ramps by case
+  (rookie → master), and every 10th case is a **boss case**: hints forbidden
+  (server-enforced `hints_forbidden_boss`), tighter countdowns, distinct
+  visual treatment.
+- **Juice** — correct/incorrect flashes with pop/shake animations, Web-Audio
+  sound cues, a floating combo popup, results score count-up, and a pure-CSS
+  confetti burst on solved verdicts — all disabled-under-motion via
+  `prefers-reduced-motion` (colors stay, movement drops).
+- **Share card** — the results screen renders a canvas score card in the
+  active skin's palette and shares it via the Web Share API (image where
+  supported, text fallback, copy-to-clipboard last resort) — fully
+  client-side, no server endpoint.
+- **Audio & haptics** — a generative ambient loop (Web Audio, no audio
+  files), sound cues, and Vibration-API taps, each with its own persisted
+  toggle (music / SFX / vibration) in Profile → Settings.
+- **Per-difficulty backgrounds** — the match screen's backdrop shifts tone
+  and motion with puzzle difficulty (calm greens at rookie → intense reds at
+  master), layered *under* the active world-skin flourish so both compose.
 
 ## Installable app (PWA)
 

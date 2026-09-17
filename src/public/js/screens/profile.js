@@ -3,6 +3,7 @@
 import { api } from '../api.js';
 import { $, el, showScreen, fmtMs, pct } from '../ui.js';
 import { getScheme, toggleScheme } from '../theme.js';
+import { getMusicEnabled, setMusicEnabled, getSfxEnabled, setSfxEnabled, getVibrationEnabled, setVibrationEnabled, playTick } from '../sfx.js';
 
 const TYPE_NAMES = {
   pattern: 'Pattern', sequence: 'Sequence', matrix: 'Matrix', deduction: 'Deduction',
@@ -90,20 +91,50 @@ export async function goProfile() {
   }
 }
 
-// Color-scheme shortcut card (skins live in the Skins store).
+// Settings card: color scheme + audio/vibration toggles (Phase 7) — one
+// panel, all client-side, persisted per browser, safe on unsupported devices.
 function buildSchemeCard() {
   const card = el('div', { class: 'card' }, el('h3', { text: 'Settings' }));
-  const row = el('div', { class: 'row' });
-  const btn = el('button', {
+
+  const schemeBtn = el('button', {
     class: 'diff-btn', type: 'button',
     text: getScheme() === 'light' ? '☀ Light mode (active)' : '☾ Dark mode (active)',
   });
-  btn.addEventListener('click', () => {
+  schemeBtn.addEventListener('click', () => {
     toggleScheme();
-    btn.textContent = getScheme() === 'light' ? '☀ Light mode (active)' : '☾ Dark mode (active)';
+    schemeBtn.textContent = getScheme() === 'light' ? '☀ Light mode (active)' : '☾ Dark mode (active)';
   });
-  row.append(btn, el('span', { class: 'sub', text: 'Skins are managed in the Skins store.' }));
-  card.append(row);
+  card.append(el('div', { class: 'row' },
+    schemeBtn,
+    el('span', { class: 'sub', text: 'Skins are managed in the Skins store.' }),
+  ));
+
+  const settingsGrid = el('div', { class: 'settings-grid' });
+  const toggle = (label, get, set, hint) => {
+    const btn = el('button', {
+      class: `diff-btn toggle${get() ? ' on' : ''}`, type: 'button',
+      text: `${get() ? '🔊' : '🔇'} ${label}: ${get() ? 'On' : 'Off'}`,
+    });
+    btn.addEventListener('click', () => {
+      set(!get());
+      btn.textContent = `${get() ? '🔊' : '🔇'} ${label}: ${get() ? 'On' : 'Off'}`;
+      btn.classList.toggle('on', get());
+      playTick(); // audible confirmation (respects the new SFX setting)
+    });
+    settingsGrid.append(
+      el('div', { class: 'setting-row' },
+        el('div', {},
+          el('strong', { text: label }),
+          el('span', { class: 'sub', text: hint }),
+        ),
+        btn,
+      ),
+    );
+  };
+  toggle('Music', getMusicEnabled, setMusicEnabled, 'Ambient loop while you play');
+  toggle('Sound effects', getSfxEnabled, setSfxEnabled, 'Correct / incorrect cues');
+  toggle('Vibration', getVibrationEnabled, setVibrationEnabled, 'Haptic taps on supported phones');
+  card.append(settingsGrid);
   return card;
 }
 

@@ -56,7 +56,7 @@ export function showScreen(id) {
   $(id).classList.remove('hidden');
   window.scrollTo(0, 0);
   // sync nav active states
-  const map = { 'screen-home': 'home', 'screen-training': 'play', 'screen-game': 'play', 'screen-results': 'play', 'screen-leaderboard': 'leaderboard', 'screen-profile': 'profile' };
+  const map = { 'screen-home': 'home', 'screen-training': 'play', 'screen-game': 'play', 'screen-results': 'play', 'screen-campaign': 'campaign', 'screen-leaderboard': 'leaderboard', 'screen-profile': 'profile' };
   const active = map[id.replace('#', '')];
   $$('.nav-btn, .bnav').forEach((b) => b.classList.toggle('active', b.dataset.nav === active));
 }

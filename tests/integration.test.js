@@ -46,7 +46,8 @@ async function playFullMatch(token, mode, opts = {}) {
   const start = await api('POST', path, { token, body: opts.body ?? {} });
   if (start.status !== 200) return start;
   const { matchId, puzzles } = start.json;
-  for (let i = 0; i < puzzles.length; i++) {
+  const count = opts.stopAfter ?? puzzles.length;
+  for (let i = 0; i < count; i++) {
     await api('POST', `/api/match/${matchId}/answer`, { token, body: { puzzleIndex: i, answer: '0', msTaken: 5000 + i * 100 } });
   }
   const fin = await api('POST', `/api/match/${matchId}/finish`, { token });
@@ -56,7 +57,7 @@ async function playFullMatch(token, mode, opts = {}) {
 before(async () => {
   dir = mkdtempSync(join(tmpdir(), 'arena-test-'));
   child = spawn(process.execPath, ['src/server/index.js'], {
-    env: { ...process.env, PORT: String(PORT), DB_PATH: join(dir, 'test.db'), RATE_AUTH: '200', RATE_SUBMIT: '1000', RATE_API: '5000', ADS_PROVIDER: 'mock', ADS_REWARD_SECRET: '' },
+    env: { ...process.env, PORT: String(PORT), DB_PATH: join(dir, 'test.db'), DB_PATH_TEST: join(dir, 'test.db'), RATE_AUTH: '200', RATE_SUBMIT: '1000', RATE_API: '5000', ADS_PROVIDER: 'mock', ADS_REWARD_SECRET: '' },
     stdio: ['ignore', 'ignore', 'inherit'], // surface server errors during development
   });
   for (let i = 0; i < 40; i++) {
@@ -461,6 +462,7 @@ test('tournament: entry costs 25 diamonds, one per week, rejects when broke', as
   const enter = await api('POST', '/api/tournament/enter', { token: p.token, body: {} });
   assert.equal(enter.status, 200, JSON.stringify(enter.json));
   assert.equal(enter.json.puzzles.length, 6, 'tournament runs a daily-length case');
+  assert.equal(enter.json.lives, 3, 'tournament is a lives mode');
   const after = await api('GET', '/api/wallet', { token: p.token });
   assert.equal(after.json.diamonds, 0, 'entry deducted exactly 25');
 
@@ -470,8 +472,9 @@ test('tournament: entry costs 25 diamonds, one per week, rejects when broke', as
   assert.equal(resume.json.resumed, true, 'active entry must resume, not re-enter');
   assert.equal(resume.json.matchId, enter.json.matchId);
 
-  // Play it through; standings render with the payout schedule.
-  for (let i = 0; i < enter.json.puzzles.length; i++) {
+  // Answer only two puzzles (both wrong): 2 lives lost, 1 left, so the match
+  // can still be finished as completed and appear on the standings.
+  for (let i = 0; i < 2; i++) {
     await api('POST', `/api/match/${enter.json.matchId}/answer`, { token: p.token, body: { puzzleIndex: i, answer: '0', msTaken: 6000 } });
   }
   await api('POST', `/api/match/${enter.json.matchId}/finish`, { token: p.token });
@@ -673,8 +676,268 @@ test('profile aggregates stats and empty state is clean', async () => {
   assert.equal(prof.status, 200);
   assert.equal(prof.json.accuracy, null); // no games yet: clean empty state
   assert.deepEqual(prof.json.typeStats, []);
-  await playFullMatch(p.token, 'quick', {});
+  // Quick match with lives: answer only one puzzle (a wrong one costs a life
+  // but leaves 2) so the match still finishes as completed for the aggregate.
+  await playFullMatch(p.token, 'quick', { stopAfter: 1 });
   const prof2 = await api('GET', '/api/profile', { token: p.token });
   assert.ok(prof2.json.totals.completed >= 1);
   assert.ok(prof2.json.typeStats.length > 0);
+});
+
+// ══ GAME FEEL PACK (lives, combo, freeze, campaign) ══════════════════════
+test('GF lives: 3 wrong answers end a quick match as failed; 4th answer rejected; training exempt', async () => {
+  const p = await newPlayer();
+  const start = await api('POST', '/api/match/quick', { token: p.token });
+  assert.equal(start.status, 200);
+  assert.equal(start.json.lives, 3, 'quick matches start with 3 lives');
+  assert.ok(start.json.puzzles.length > 3, 'test needs more than 3 puzzles');
+
+  let failedOn = -1;
+  for (let i = 0; i < 3; i++) {
+    const r = await api('POST', `/api/match/${start.json.matchId}/answer`, { token: p.token, body: { puzzleIndex: i, answer: '0', msTaken: 6000 } });
+    assert.equal(r.status, 200);
+    assert.equal(r.json.correct, false, 'blind answer expected wrong');
+    assert.equal(r.json.livesLeft, 2 - i);
+    if (r.json.matchFailed) { failedOn = i; break; }
+  }
+  assert.equal(failedOn, 2, 'match must fail on the 3rd wrong answer');
+
+  // The server closed the match and dropped its answer key: a 4th answer
+  // attempt must be rejected (404: match gone/closed, never served again).
+  const late = await api('POST', `/api/match/${start.json.matchId}/answer`, { token: p.token, body: { puzzleIndex: 3, answer: '0', msTaken: 6000 } });
+  assert.ok(late.status === 404 || late.status === 409, `expected rejection, got ${late.status}`);
+
+  // Failed results are readable for the post-mortem screen; wallet untouched.
+  const res = await api('GET', `/api/match/${start.json.matchId}/results`, { token: p.token });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.status, 'failed');
+  assert.equal(res.json.correctCount, 0);
+  const wallet = await api('GET', '/api/wallet', { token: p.token });
+  assert.equal(wallet.json.diamonds, 0, 'failed match pays no diamonds');
+
+  // Training is exempt: lives report 0 (no hearts), all-wrong answers never
+  // end it early, and answers carry no lives/combo bookkeeping.
+  const tr = await api('POST', '/api/match/training', { token: p.token, body: { types: ['sequence'], difficulty: 'easy' } });
+  assert.equal(tr.json.lives, 0, 'training must report no lives');
+  for (let i = 0; i < tr.json.puzzles.length; i++) {
+    const r = await api('POST', `/api/match/${tr.json.matchId}/answer`, { token: p.token, body: { puzzleIndex: i, answer: '0', msTaken: 6000 } });
+    assert.equal(r.status, 200);
+    assert.equal(r.json.matchFailed, undefined, 'training never fails on lives');
+    assert.equal(r.json.livesLeft, undefined);
+  }
+  const trFin = await api('POST', `/api/match/${tr.json.matchId}/finish`, { token: p.token });
+  assert.equal(trFin.status, 200, 'training completes normally after all-wrong answers');
+});
+
+test('GF lives: finishing with lives remaining completes the match normally', async () => {
+  const p = await newPlayer();
+  const q = await api('POST', '/api/match/quick', { token: p.token });
+  // One wrong answer burns one life; two remain, so finishing still completes.
+  const r1 = await api('POST', `/api/match/${q.json.matchId}/answer`, { token: p.token, body: { puzzleIndex: 0, answer: '0', msTaken: 6000 } });
+  assert.equal(r1.status, 200);
+  assert.equal(r1.json.matchFailed, undefined, 'one wrong answer must not fail the match');
+  const fin = await api('POST', `/api/match/${q.json.matchId}/finish`, { token: p.token });
+  assert.equal(fin.status, 200);
+  assert.equal(fin.json.mode, 'quick');
+  assert.ok(fin.json.score >= 0);
+});
+
+test('GF combo: server tracks the live streak and resets it on wrong answers', async () => {
+  const p = await newPlayer();
+  const body = { types: ['sequence'], difficulty: 'easy', seed: 4242 };
+  const run1 = await api('POST', '/api/match/training', { token: p.token, body });
+  for (let i = 0; i < run1.json.puzzles.length; i++) {
+    await api('POST', `/api/match/${run1.json.matchId}/answer`, { token: p.token, body: { puzzleIndex: i, answer: '0', msTaken: 5000 } });
+  }
+  const fin1 = await api('POST', `/api/match/${run1.json.matchId}/finish`, { token: p.token });
+  const key = fin1.json.results.map((r) => String(r.correctAnswer));
+
+  // Run 2: answer key for the first two (streak 1, 2), blind on the third (reset).
+  const run2 = await api('POST', '/api/match/training', { token: p.token, body });
+  const r1 = await api('POST', `/api/match/${run2.json.matchId}/answer`, { token: p.token, body: { puzzleIndex: 0, answer: key[0], msTaken: 5000 } });
+  assert.equal(r1.json.streak, 1);
+  const r2 = await api('POST', `/api/match/${run2.json.matchId}/answer`, { token: p.token, body: { puzzleIndex: 1, answer: key[1], msTaken: 5000 } });
+  assert.equal(r2.json.streak, 2);
+  const r3 = await api('POST', `/api/match/${run2.json.matchId}/answer`, { token: p.token, body: { puzzleIndex: 2, answer: '0', msTaken: 5000 } });
+  assert.equal(r3.json.streak, 0, 'a wrong answer must reset the streak');
+  // Correct again: streak restarts at 1, not 3.
+  const r4 = await api('POST', `/api/match/${run2.json.matchId}/answer`, { token: p.token, body: { puzzleIndex: 3, answer: key[3], msTaken: 5000 } });
+  assert.equal(r4.json.streak, 1);
+  await api('POST', `/api/match/${run2.json.matchId}/finish`, { token: p.token });
+});
+
+test('GF combo: perfect run outscores a blind run with identical timing', async () => {
+  const p = await newPlayer();
+  const body = { types: ['sequence'], difficulty: 'easy', seed: 9001 };
+  const run1 = await api('POST', '/api/match/training', { token: p.token, body });
+  for (let i = 0; i < run1.json.puzzles.length; i++) {
+    await api('POST', `/api/match/${run1.json.matchId}/answer`, { token: p.token, body: { puzzleIndex: i, answer: '0', msTaken: 5000 } });
+  }
+  const fin1 = await api('POST', `/api/match/${run1.json.matchId}/finish`, { token: p.token });
+  const key = fin1.json.results.map((r) => String(r.correctAnswer));
+  assert.ok(key.every((k) => k !== '0'), 'test setup requires real keys');
+
+  const run2 = await api('POST', '/api/match/training', { token: p.token, body });
+  for (let i = 0; i < run2.json.puzzles.length; i++) {
+    await api('POST', `/api/match/${run2.json.matchId}/answer`, { token: p.token, body: { puzzleIndex: i, answer: key[i], msTaken: 5000 } });
+  }
+  const fin2 = await api('POST', `/api/match/${run2.json.matchId}/finish`, { token: p.token });
+  assert.equal(fin2.json.correctCount, fin2.json.totalCount);
+  assert.ok(fin2.json.score > fin1.json.score, 'perfect run must outscore the blind run');
+});
+
+test('GF freeze: costs exactly 10 diamonds, rejects when broke, validates match/index', async () => {
+  const p = await newPlayer();
+  const start = await api('POST', '/api/match/training', { token: p.token, body: { types: ['sequence'], difficulty: 'easy' } });
+  const broke = await api('POST', '/api/freeze', { token: p.token, body: { matchId: start.json.matchId, puzzleIndex: 0 } });
+  assert.equal(broke.status, 402);
+  assert.equal(broke.json.error, 'insufficient_diamonds');
+
+  // Fund via the deterministic daily bonus (+5) and ads (+25) = 30.
+  await api('POST', '/api/bonus/daily', { token: p.token, body: {} });
+  for (let i = 0; i < 5; i++) await api('POST', '/api/ad-reward', { token: p.token, body: { provider: 'mock' } });
+  const w1 = await api('GET', '/api/wallet', { token: p.token });
+  assert.equal(w1.json.diamonds, 30);
+
+  const ok = await api('POST', '/api/freeze', { token: p.token, body: { matchId: start.json.matchId, puzzleIndex: 0 } });
+  assert.equal(ok.status, 200, JSON.stringify(ok.json));
+  assert.equal(ok.json.frozenForMs, 10000);
+  assert.equal(ok.json.diamondsLeft, 20, 'freeze costs exactly 10');
+  const w2 = await api('GET', '/api/wallet', { token: p.token });
+  assert.equal(w2.json.diamonds, 20);
+
+  // Unknown match and bad index are handled cleanly.
+  const bad = await api('POST', '/api/freeze', { token: p.token, body: { matchId: 'm_nope', puzzleIndex: 0 } });
+  assert.equal(bad.status, 404);
+  const badIdx = await api('POST', '/api/freeze', { token: p.token, body: { matchId: start.json.matchId, puzzleIndex: 999 } });
+  assert.equal(badIdx.status, 400);
+});
+
+test('GF campaign: cases unlock in order, completion advances, boss cases forbid hints', async () => {
+  const p = await newPlayer();
+  const map0 = await api('GET', '/api/campaign', { token: p.token });
+  assert.equal(map0.status, 200);
+  assert.equal(map0.json.currentCase, 1);
+  assert.equal(map0.json.bossEvery, 10);
+  assert.ok(map0.json.totalCases > 10);
+  assert.equal(map0.json.cases.length, 1, 'only case 1 visible initially');
+  assert.equal(map0.json.cases[0].boss, false);
+  assert.equal(map0.json.cases[0].difficulty, 'rookie', 'early cases skew easy');
+
+  // Case 2 is locked.
+  const locked = await api('POST', '/api/campaign/start', { token: p.token, body: { caseNumber: 2 } });
+  assert.equal(locked.status, 403);
+  assert.equal(locked.json.error, 'case_locked');
+
+  // Campaign is lives-exempt: all 10 wrong answers still serve.
+  const c1 = await api('POST', '/api/campaign/start', { token: p.token, body: { caseNumber: 1 } });
+  assert.equal(c1.status, 200, JSON.stringify(c1.json));
+  assert.equal(c1.json.lives, 0, 'campaign is exempt from lives');
+  assert.equal(c1.json.boss, false);
+  for (let i = 0; i < c1.json.puzzles.length; i++) {
+    await api('POST', `/api/match/${c1.json.matchId}/answer`, { token: p.token, body: { puzzleIndex: i, answer: '0', msTaken: 5000 } });
+  }
+  const fin1 = await api('POST', `/api/match/${c1.json.matchId}/finish`, { token: p.token });
+  assert.equal(fin1.status, 200);
+  assert.equal(fin1.json.mode, 'campaign');
+  assert.ok(fin1.json.campaign, 'campaign payload returned on finish');
+  assert.equal(fin1.json.campaign.status, 'completed', 'finishing marks the case completed');
+  assert.equal(fin1.json.campaign.currentCase, 2, 'completed finish unlocks the next case');
+
+  const map1 = await api('GET', '/api/campaign', { token: p.token });
+  assert.equal(map1.json.currentCase, 2);
+  assert.ok(map1.json.cases.length >= 2);
+  assert.equal(map1.json.cases[0].completed, true);
+  assert.equal(map1.json.cases[0].unlocked, true);
+  assert.equal(map1.json.cases[1].unlocked, true);
+  assert.equal(map1.json.cases[1].caseNumber, 2);
+
+  // Case 10 is a boss: hints are forbidden (jump the pointer via the test DB).
+  const { DatabaseSync } = await import('node:sqlite');
+  const db = new DatabaseSync(join(dir, 'test.db'));
+  db.prepare('UPDATE campaign_progress SET current_case = 10 WHERE player_id = ?').run(p.playerId);
+  db.close();
+
+  const c10 = await api('POST', '/api/campaign/start', { token: p.token, body: { caseNumber: 10 } });
+  assert.equal(c10.status, 200, JSON.stringify(c10.json));
+  assert.equal(c10.json.boss, true, 'case 10 must be a boss case');
+  const hint = await api('POST', '/api/hint', { token: p.token, body: { matchId: c10.json.matchId, puzzleIndex: 0 } });
+  assert.equal(hint.status, 409);
+  assert.equal(hint.json.error, 'hints_forbidden_boss');
+
+  // Finishing the boss case advances to 11; progress persists.
+  for (let i = 0; i < c10.json.puzzles.length; i++) {
+    await api('POST', `/api/match/${c10.json.matchId}/answer`, { token: p.token, body: { puzzleIndex: i, answer: '0', msTaken: 5000 } });
+  }
+  const fin10 = await api('POST', `/api/match/${c10.json.matchId}/finish`, { token: p.token });
+  assert.equal(fin10.json.campaign.currentCase, 11);
+  const map2 = await api('GET', '/api/campaign', { token: p.token });
+  assert.equal(map2.json.currentCase, 11);
+});
+
+test('GF campaign: daily lives-failure pays nothing; completed cases stay replayable', async () => {
+  // Dedicated server so DB_PATH_TEST points at an isolated DB.
+  const PORT2 = 3180;
+  const BASE2 = `http://127.0.0.1:${PORT2}`;
+  const dir2 = mkdtempSync(join(tmpdir(), 'arena-camp-'));
+  const child2 = spawn(process.execPath, ['src/server/index.js'], {
+    env: { ...process.env, PORT: String(PORT2), DB_PATH: join(dir2, 'camp.db'), RATE_AUTH: '200', RATE_SUBMIT: '1000', RATE_API: '5000', DB_PATH_TEST: join(dir2, 'camp.db') },
+    stdio: 'ignore',
+  });
+  const api2 = async (method, path, { token, body } = {}) => {
+    const res = await fetch(BASE2 + path, {
+      method,
+      headers: {
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    let json = null;
+    try { json = await res.json(); } catch { /* non-JSON */ }
+    return { status: res.status, json };
+  };
+  try {
+    for (let i = 0; i < 40; i++) {
+      try { const r = await fetch(BASE2 + '/api/me'); if (r.status === 401) break; } catch { /* not yet */ }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    const email = `gf${Date.now()}@test.dev`;
+    const reg = await api2('POST', '/api/auth/register', { body: { email, password: 'correct-horse-battery', displayName: 'Feel Tester' } });
+    assert.equal(reg.status, 200);
+    const { token } = reg.json;
+
+    // Lives-failure on the daily: 3rd wrong answer fails the match, wallet
+    // stays at zero, and the failed results endpoint serves the post-mortem.
+    const daily = await api2('POST', '/api/match/daily', { token, body: {} });
+    assert.equal(daily.status, 200);
+    let failed = false;
+    for (let i = 0; i < 3; i++) {
+      const r = await api2('POST', `/api/match/${daily.json.matchId}/answer`, { token, body: { puzzleIndex: i, answer: '0', msTaken: 5000 } });
+      if (r.json.matchFailed) { failed = true; break; }
+    }
+    assert.equal(failed, true, 'daily lives must fail the match on the 3rd wrong answer');
+    const res = await api2('GET', `/api/match/${daily.json.matchId}/results`, { token });
+    assert.equal(res.json.status, 'failed');
+    const wallet = await api2('GET', '/api/wallet', { token });
+    assert.equal(wallet.json.diamonds, 0, 'failed daily pays nothing');
+
+    // Campaign case 1 completed -> case 2 unlocked; completed cases replayable;
+    // case 3 stays locked because case 2 was never finished.
+    const c1 = await api2('POST', '/api/campaign/start', { token, body: { caseNumber: 1 } });
+    for (let i = 0; i < c1.json.puzzles.length; i++) {
+      await api2('POST', `/api/match/${c1.json.matchId}/answer`, { token, body: { puzzleIndex: i, answer: '0', msTaken: 5000 } });
+    }
+    await api2('POST', `/api/match/${c1.json.matchId}/finish`, { token });
+    const replay = await api2('POST', '/api/campaign/start', { token, body: { caseNumber: 1 } });
+    assert.equal(replay.status, 200, 'completed cases stay replayable');
+    const c2 = await api2('POST', '/api/campaign/start', { token, body: { caseNumber: 2 } });
+    assert.equal(c2.status, 200);
+    const c3 = await api2('POST', '/api/campaign/start', { token, body: { caseNumber: 3 } });
+    assert.equal(c3.status, 403, 'case 3 must stay locked while case 2 is unfinished');
+  } finally {
+    child2.kill();
+    await new Promise((r) => setTimeout(r, 400));
+    try { rmSync(dir2, { recursive: true, force: true }); } catch { /* best effort */ }
+  }
 });

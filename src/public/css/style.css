@@ -546,3 +546,169 @@ body.skin-treasure .invite-card {
 /* profile: theme picker (kept until skins store replaces it) */
 .theme-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 .referral-input { flex: 1 1 260px; min-width: 200px; background: var(--card2, #12151d); border: 1px solid var(--line); border-radius: 8px; color: var(--text); padding: 9px 12px; font-size: 0.92rem; }
+/* ══ GAME FEEL PACK ═════════════════════════════════════════════════════ */
+
+/* ── HUD: lives, streak chip, countdown ─────────────────────────────── */
+.hud-right { display: flex; align-items: center; gap: 10px; }
+.lives { display: flex; gap: 2px; font-size: 1.05rem; letter-spacing: 2px; }
+.life { transition: transform 0.18s ease, opacity 0.18s ease, filter 0.18s ease; }
+.life.lost { opacity: 0.35; filter: grayscale(1); transform: scale(0.85); }
+.life.breaking { animation: heart-break 0.45s ease forwards; }
+@keyframes heart-break {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.35) rotate(-8deg); filter: brightness(1.6); }
+  100% { transform: scale(0.85) rotate(6deg); filter: grayscale(1); opacity: 0.35; }
+}
+.streak-chip {
+  border: 1px solid rgba(255, 160, 60, 0.5);
+  background: linear-gradient(135deg, rgba(255, 160, 60, 0.14), rgba(255, 90, 60, 0.1));
+  color: var(--warn, #fbbf24);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-weight: 800;
+  font-size: 0.85rem;
+  animation: streak-pulse 1.2s ease-in-out infinite;
+}
+@keyframes streak-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+.timer.t-mid { color: var(--warn, #fbbf24); }
+.timer.t-low { color: var(--bad, #f87171); animation: timer-blink 0.8s step-end infinite; }
+@keyframes timer-blink { 50% { opacity: 0.55; } }
+.timer-bar-wrap { height: 5px; border-radius: 4px; background: var(--bg2, #1a1f2e); overflow: hidden; margin: 2px 0 10px; }
+.timer-bar { height: 100%; width: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--good, #4ade80), var(--accent, #4cc9f0)); transition: width 0.25s linear; }
+.timer-bar.t-mid { background: linear-gradient(90deg, var(--warn, #fbbf24), #ff9f43); }
+.timer-bar.t-low { background: linear-gradient(90deg, var(--bad, #f87171), #ff5c5c); }
+
+/* combo popup: floats up, fades, removes itself — no layout shift */
+.combo-host { position: relative; height: 0; }
+.combo-pop {
+  position: absolute; left: 50%; top: 0; transform: translateX(-50%);
+  font-weight: 900; font-size: 1.35rem; color: #ffb347;
+  text-shadow: 0 0 18px rgba(255, 120, 40, 0.65), 0 2px 0 rgba(0,0,0,0.4);
+  pointer-events: none; z-index: 5;
+  animation: combo-rise 1s ease-out forwards;
+}
+@keyframes combo-rise {
+  0% { opacity: 0; transform: translateX(-50%) scale(0.6); }
+  18% { opacity: 1; transform: translateX(-50%) scale(1.15); }
+  30% { transform: translateX(-50%) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-42px) scale(1.02); }
+}
+
+/* ── Juice: option feedback animations (reduced-motion drops the motion) ── */
+.opt.pop { animation: opt-pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes opt-pop { 0% { transform: scale(1); } 55% { transform: scale(1.045); } 100% { transform: scale(1); } }
+.opt.shake { animation: opt-shake 0.4s ease; }
+@keyframes opt-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-7px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(3px); }
+}
+
+/* confetti: pure CSS pieces, auto-removed by JS after ~2.3s */
+.confetti-host { position: fixed; inset: 0; pointer-events: none; z-index: 90; overflow: hidden; }
+.confetti-piece {
+  position: absolute; top: -16px; width: 9px; height: 15px; opacity: 0.95;
+  animation: confetti-fall 1.9s ease-in forwards;
+}
+.confetti-piece.round { width: 10px; height: 10px; border-radius: 50%; }
+@keyframes confetti-fall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(108vh) translateX(var(--cx, 0px)) rotate(var(--rot, 540deg)); opacity: 0.15; }
+}
+
+/* ── Freeze + boss badges + campaign map ────────────────────────────── */
+#freezeBtn:disabled { opacity: 0.55; }
+.game-meta .pill.boss-badge {
+  border-color: rgba(255, 207, 92, 0.65);
+  color: var(--warn, #ffd166);
+  animation: boss-glow 2.4s ease-in-out infinite;
+}
+@keyframes boss-glow {
+  0%, 100% { box-shadow: 0 0 6px rgba(255, 207, 92, 0.2); }
+  50% { box-shadow: 0 0 14px rgba(255, 207, 92, 0.45); }
+}
+.intro-card.boss { border-color: rgba(255, 207, 92, 0.55); box-shadow: 0 0 24px rgba(255, 207, 92, 0.15); }
+
+.campaign-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 640px) { .campaign-grid { grid-template-columns: 1fr 1fr; } }
+.campaign-card { display: grid; gap: 10px; }
+.campaign-card.locked { opacity: 0.6; }
+.campaign-card.boss { border-color: rgba(255, 207, 92, 0.5); }
+.campaign-swatch {
+  height: 64px; border-radius: 10px; border: 1px solid var(--line);
+  display: grid; place-items: center; position: relative; overflow: hidden;
+}
+.campaign-num { font-size: 1.5rem; font-weight: 800; opacity: 0.9; }
+.boss-crown { position: absolute; top: 6px; right: 8px; font-size: 1rem; }
+.skin-badge.boss { color: var(--warn, #ffd166); border-color: rgba(255, 207, 92, 0.5); }
+.campaign-card .diff-rookie { background: linear-gradient(135deg, #10331f, #1c5b38); }
+.campaign-card .diff-easy { background: linear-gradient(135deg, #14321f, #2e7d46); }
+.campaign-card .diff-medium { background: linear-gradient(135deg, #31274f, #5b4bc4); }
+.campaign-card .diff-hard { background: linear-gradient(135deg, #40250c, #9c5b16); }
+.campaign-card .diff-expert { background: linear-gradient(135deg, #421010, #a12f2f); }
+.campaign-card .diff-master { background: linear-gradient(135deg, #2b0f33, #7a1fa0); }
+
+/* ── settings grid (profile) ────────────────────────────────────────── */
+.settings-grid { display: grid; gap: 10px; margin-top: 10px; }
+.setting-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.setting-row .sub { display: block; font-size: 0.8rem; }
+.diff-btn.toggle { min-width: 150px; }
+.diff-btn.toggle.on { border-color: rgba(76, 201, 240, 0.5); color: var(--text); }
+
+/* ── per-difficulty gameplay backgrounds (compose with the skin layer) ── */
+.game-stage { position: relative; border-radius: 12px; padding: 6px 10px 2px; }
+.game-stage::before {
+  content: ''; position: absolute; inset: -12px; z-index: -1; border-radius: 18px;
+  pointer-events: none; opacity: 0.5; transition: background 0.6s ease;
+}
+.game-stage[data-diff='rookie']::before { background: linear-gradient(140deg, rgba(74, 222, 128, 0.07), rgba(76, 201, 240, 0.05) 60%, transparent); animation: diff-calm 14s ease-in-out infinite alternate; }
+.game-stage[data-diff='easy']::before { background: linear-gradient(140deg, rgba(74, 222, 128, 0.09), rgba(76, 201, 240, 0.07) 60%, transparent); animation: diff-calm 12s ease-in-out infinite alternate; }
+.game-stage[data-diff='medium']::before { background: linear-gradient(140deg, rgba(76, 201, 240, 0.1), rgba(123, 108, 246, 0.08) 60%, transparent); animation: diff-calm 10s ease-in-out infinite alternate; }
+.game-stage[data-diff='hard']::before { background: linear-gradient(140deg, rgba(255, 159, 67, 0.12), rgba(255, 107, 122, 0.07) 60%, transparent); animation: diff-intense 6s ease-in-out infinite alternate; }
+.game-stage[data-diff='expert']::before { background: linear-gradient(140deg, rgba(255, 107, 122, 0.14), rgba(255, 95, 210, 0.08) 60%, transparent); animation: diff-intense 4.5s ease-in-out infinite alternate; }
+.game-stage[data-diff='master']::before { background: linear-gradient(140deg, rgba(255, 80, 90, 0.17), rgba(122, 31, 160, 0.12) 55%, transparent); animation: diff-intense 3.2s ease-in-out infinite alternate; }
+@keyframes diff-calm { from { transform: scale(1); } to { transform: scale(1.06); } }
+@keyframes diff-intense { from { transform: scale(1.02); opacity: 0.55; } to { transform: scale(1.09); opacity: 0.8; } }
+
+/* ── cartoon intro (magnifier + clues), skippable ───────────────────── */
+.toon-stage { position: relative; height: 150px; margin: 0 auto 6px; max-width: 340px; color: var(--accent, #4cc9f0); }
+.toon-floor { position: absolute; bottom: 8px; left: 10%; right: 10%; height: 3px; border-radius: 2px; background: var(--line); }
+.toon-magnifier { position: absolute; bottom: 10px; left: 0; width: 92px; height: 92px; animation: toon-hop 2.6s cubic-bezier(0.36, 0.07, 0.19, 0.97) infinite; }
+@keyframes toon-hop {
+  0%, 100% { transform: translateX(0) rotate(-6deg); }
+  25% { transform: translateX(60px) rotate(4deg) translateY(-16px); }
+  50% { transform: translateX(120px) rotate(-5deg); }
+  75% { transform: translateX(180px) rotate(5deg) translateY(-16px); }
+}
+.toon-clue { position: absolute; bottom: 26px; font-size: 1.2rem; opacity: 0; animation: clue-pop 2.6s ease infinite; }
+.toon-clue.c1 { left: 18%; animation-delay: 0.5s; }
+.toon-clue.c2 { left: 45%; animation-delay: 1.2s; }
+.toon-clue.c3 { left: 74%; animation-delay: 1.9s; }
+@keyframes clue-pop { 0% { opacity: 0; transform: translateY(8px) scale(0.6); } 12% { opacity: 1; transform: translateY(0) scale(1.1); } 24% { opacity: 1; transform: none; } 40% { opacity: 0; transform: translateY(-10px); } 100% { opacity: 0; } }
+.toon-zap { position: absolute; bottom: 6px; left: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--warn, #ffd166); box-shadow: 0 0 10px rgba(255, 209, 102, 0.8); animation: toon-zap 2.6s linear infinite; }
+@keyframes toon-zap { 0% { left: 4%; } 100% { left: 92%; } }
+
+/* ── reduced motion: keep color signals, drop movement ───────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .life.breaking { animation: none; }
+  .streak-chip { animation: none; }
+  .timer.t-low { animation: none; }
+  .combo-pop { animation: combo-rise-static 1s ease-out forwards; }
+  .opt.pop, .opt.shake { animation: none; }
+  .confetti-host { display: none; }
+  .game-meta .pill.boss-badge { animation: none; }
+  .game-stage::before { animation: none !important; }
+  .toon-magnifier, .toon-clue, .toon-zap { animation-duration: 0.01ms !important; }
+}
+@keyframes combo-rise-static {
+  0% { opacity: 0; }
+  15% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}

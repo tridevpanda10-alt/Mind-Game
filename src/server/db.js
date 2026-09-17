@@ -57,6 +57,9 @@ CREATE TABLE IF NOT EXISTS match_players (            -- one row per participant
   xp_awarded     INTEGER,
   rating_before  INTEGER,
   rating_after   INTEGER,
+  boss           INTEGER NOT NULL DEFAULT 0,             -- campaign boss case (no hints, special styling)
+  lives          INTEGER,                                -- NULL = no lives (training/campaign); else hearts left
+  campaign_case  INTEGER,                                -- campaign mode only: which numbered case
   PRIMARY KEY (match_id, player_id)
 );
 CREATE INDEX IF NOT EXISTS idx_mp_player ON match_players(player_id, started_at DESC);
@@ -149,6 +152,21 @@ CREATE TABLE IF NOT EXISTS audit_log (
   detail      TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_audit_player ON audit_log(player_id, at DESC);
+
+CREATE TABLE IF NOT EXISTS campaign_progress (           -- unlock pointer per player
+  player_id    TEXT PRIMARY KEY REFERENCES players(player_id),
+  current_case INTEGER NOT NULL DEFAULT 1,
+  updated_at   INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS campaign_cases (              -- per-case completion state
+  player_id   TEXT NOT NULL REFERENCES players(player_id),
+  case_number INTEGER NOT NULL,
+  completed   INTEGER NOT NULL DEFAULT 0,
+  best_score  INTEGER,
+  attempts    INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (player_id, case_number)
+);
 `;
 
 let db = null;
@@ -170,6 +188,24 @@ export function initDb(dbPath) {
   addCol('players', '"first_match_at" INTEGER');
   // Owned world skins: JSON array of skin ids; detective is free/always owned.
   addCol('players', '"unlocked_skins" TEXT NOT NULL DEFAULT \'["detective"]\'');
+  // Game-feel pack: boss flags + lives on existing match rows, campaign tables.
+  addCol('match_players', '"boss" INTEGER NOT NULL DEFAULT 0');
+  addCol('match_players', '"lives" INTEGER');
+  addCol('match_players', '"campaign_case" INTEGER');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_mp_campaign ON match_players(player_id, campaign_case, status)');
+  db.exec(`CREATE TABLE IF NOT EXISTS campaign_progress (
+    player_id    TEXT PRIMARY KEY REFERENCES players(player_id),
+    current_case INTEGER NOT NULL DEFAULT 1,
+    updated_at   INTEGER
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS campaign_cases (
+    player_id   TEXT NOT NULL REFERENCES players(player_id),
+    case_number INTEGER NOT NULL,
+    completed   INTEGER NOT NULL DEFAULT 0,
+    best_score  INTEGER,
+    attempts    INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (player_id, case_number)
+  )`);
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_players_referral ON players(referral_code) WHERE referral_code IS NOT NULL');
   return db;
 }

@@ -137,16 +137,21 @@ function makePuzzleNoValidate(type, difficulty, seed) {
 // Uniqueness guarantee: no identical puzzle (same question + option set) may
 // appear twice in one batch — duplicates are re-rolled with fresh seeds.
 export function makePuzzleBatch(typeList, difficulty, seed, count) {
+  // difficulty may be a scalar (whole batch) or a per-puzzle ladder — quick
+  // matches use a mixed ladder so pacing and the difficulty backdrop shift
+  // within a single session.
+  const ladder = Array.isArray(difficulty) ? difficulty : null;
   const puzzles = [];
   const seen = new Set(); // puzzle signatures already in this batch
   let s = seed >>> 0;
   let misses = 0; // consecutive duplicate rolls before widening the net
   for (let i = 0; i < count; i++) {
     const type = typeList[i % typeList.length];
+    const diff = ladder ? ladder[i % ladder.length] : difficulty;
     let puzzle = null;
     for (let attempt = 0; attempt < 60 && !puzzle; attempt++) {
       s = (s * 1664525 + 1013904223) >>> 0; // LCG step per attempt
-      const candidate = makePuzzle(type, difficulty, s);
+      const candidate = makePuzzle(type, diff, s);
       if (!candidate) continue;
       const sig = puzzleSignature(candidate);
       if (seen.has(sig)) {

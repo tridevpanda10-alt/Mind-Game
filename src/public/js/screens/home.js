@@ -3,7 +3,7 @@
 
 import { api, getDiamonds, setDiamonds, referralLink } from '../api.js';
 import { $, showScreen, toast, pct } from '../ui.js';
-import { theme } from '../theme.js';
+import { theme, campaignTheme } from '../theme.js';
 import { startMatch } from './game.js';
 
 let dailyAvailable = null;
@@ -22,6 +22,9 @@ function applyThemeLabels() {
   $('#rankedDesc').textContent = h.rankedBody;
   $('#trainingTitle').textContent = h.trainingTitle;
   $('#trainingDesc').textContent = h.trainingBody;
+  const c = campaignTheme();
+  $('#homeCampaignTitle').textContent = c.mapTitle;
+  $('#homeCampaignDesc').textContent = 'Numbered cases that unlock in order. How far can you get?';
 }
 
 export async function goHome() {
@@ -66,6 +69,7 @@ export async function goHome() {
       const pill = $('#tournamentPill');
       if (pill) { pill.textContent = 'Register to enter'; pill.className = 'pill'; }
     }
+    refreshCampaign();
     refreshReferral(me);
     void dailyAvailable;
     // fetch accuracy + streak asynchronously from profile
@@ -83,6 +87,26 @@ export async function goHome() {
 function renderDiamonds() {
   const chip = $('#chipDiamonds');
   if (chip) chip.textContent = String(getDiamonds());
+}
+
+// Campaign card: show where the player stands on the case board.
+async function refreshCampaign() {
+  const pill = $('#campaignPill');
+  if (!pill) return;
+  try {
+    const c = await api('GET', '/api/campaign');
+    const cur = c.cases.find((x) => x.caseNumber === c.currentCase);
+    if (cur?.boss && cur.unlocked) {
+      pill.textContent = `Case ${c.currentCase} is a boss case — no hints!`;
+      pill.className = 'pill warn';
+    } else {
+      pill.textContent = `Case ${c.currentCase} of ${c.totalCases} open`;
+      pill.className = 'pill good';
+    }
+  } catch {
+    pill.textContent = 'Case board unavailable';
+    pill.className = 'pill';
+  }
 }
 
 async function refreshTournament() {
@@ -153,6 +177,8 @@ export function initHome() {
         startMatch('daily');
       } else if (action === 'tournament') {
         startMatch('tournament');
+      } else if (action === 'campaign') {
+        import('./campaign.js').then(({ goCampaign }) => goCampaign());
       }
     });
   });

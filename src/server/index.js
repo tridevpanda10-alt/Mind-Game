@@ -10,8 +10,9 @@ import { fileURLToPath } from 'node:url';
 import { initDb, q, all, one, transaction, logAudit } from './db.js';
 import { hashPassword, verifyPassword, newSessionToken, hashToken, newPlayerId } from './auth.js';
 import { randomBytes } from 'node:crypto';
-import { startMatch, submitAnswer, finishMatch, abandonMatch, buildDailyTypes, puzzlePayload, takeKey, puzzlesRemaining, hintPuzzle, skipPuzzle, awardDailyLoginBonus, DIAMONDS, startTournamentMatch } from './matchService.js';
+import { startMatch, submitAnswer, finishMatch, abandonMatch, buildDailyTypes, puzzlePayload, takeKey, puzzlesRemaining, hintPuzzle, skipPuzzle, freezeTime, awardDailyLoginBonus, DIAMONDS, startTournamentMatch, campaignStatus, startCampaignCase, finishCampaignCase } from './matchService.js';
 import { MODES, levelProgress } from './scoring.js';
+import { STARTING_LIVES } from './matchService.js';
 import { isKnownSkin, getSkin, skinCatalog } from './skins.js';
 import { seedFromString } from './puzzles/rng.js';
 
@@ -230,13 +231,13 @@ app.post('/api/match/training', requireAuth, (req, res) => {
   const n = Number.isInteger(count) && count > 0 ? Math.min(30, count) : undefined; // player-chosen, max 30
   const out = startMatch({ playerId: req.session.player_id, mode: MODES.TRAINING, seed: s, types: t, difficulty: d, count: n });
   if (out.error) return res.status(500).json(out);
-  res.json({ matchId: out.matchId, puzzles: out.puzzles, parTimes: out.parTimes });
+  res.json({ matchId: out.matchId, puzzles: out.puzzles, parTimes: out.parTimes, lives: out.lives });
 });
 
 app.post('/api/match/quick', requirePlayer, (req, res) => {
   const out = startMatch({ playerId: req.session.player_id, mode: MODES.QUICK, types: ALL_TYPES, difficulty: 'medium' });
   if (out.error) return res.status(500).json(out);
-  res.json({ matchId: out.matchId, puzzles: out.puzzles, parTimes: out.parTimes });
+  res.json({ matchId: out.matchId, puzzles: out.puzzles, parTimes: out.parTimes, lives: out.lives });
 });
 
 app.get('/api/daily/status', requireAuth, (req, res) => {
@@ -273,7 +274,7 @@ app.post('/api/match/daily', requirePlayer, (req, res) => {
   if (out.error) return res.status(500).json(out);
   q('INSERT INTO daily_usage (day, player_id, match_id, status) VALUES (?, ?, ?, ?)', [day, req.session.player_id, out.matchId, 'active']);
   logAudit(req.session.player_id, 'daily_start', { day });
-  res.json({ matchId: out.matchId, puzzles: out.puzzles, parTimes: out.parTimes });
+  res.json({ matchId: out.matchId, puzzles: out.puzzles, parTimes: out.parTimes, lives: out.lives });
 });
 
 app.post('/api/match/:matchId/answer', submitLimiter, requireAuth, (req, res) => {
@@ -292,11 +293,35 @@ app.post('/api/match/:matchId/finish', submitLimiter, requireAuth, (req, res) =>
     const code = { not_your_match: 403, already_finished: 409, match_not_found_or_expired: 404, no_player: 404 }[out.error] ?? 400;
     return res.status(code).json(out);
   }
+  // Campaign progress: any completed finish advances the unlock pointer and
+  // marks the case played (failed attempts are recorded too — retry allowed).
+  let campaign = null;
+  if (out.mode === 'campaign') campaign = finishCampaignCase({ matchId: req.params.matchId, playerId: req.session.player_id, status: 'completed' });
   // Referral reward: the referrer earns diamonds only after the invited
   // player finishes their FIRST match (not on signup — that would invite
   // fake-account farming). Guest sessions never count.
   const referral = maybePayReferrer(req.session.player_id);
-  res.json({ ...out, referralBonus: referral });
+  res.json({ ...out, mode: out.mode ?? undefined, campaign, referralBonus: referral });
+});
+
+// Failed-match results: full post-mortem (no score payout, no wallet/rating
+// side effects — the match was already finalized as 'failed' by lives).
+app.get('/api/match/:matchId/results', requireAuth, (req, res) => {
+  const mp = one('SELECT * FROM match_players WHERE match_id = ? AND player_id = ?', [req.params.matchId, req.session.player_id]);
+  if (!mp) return res.status(404).json({ error: 'match_not_found' });
+  if (mp.status !== 'failed') return res.status(409).json({ error: 'not_a_failed_match' });
+  const answers = all('SELECT * FROM answers WHERE match_id = ? ORDER BY puzzle_index', [req.params.matchId]);
+  const rows = all('SELECT puzzle_ids FROM match_players WHERE match_id = ? AND player_id = ?', [req.params.matchId, req.session.player_id]);
+  let ids = [];
+  try { ids = JSON.parse(rows[0]?.puzzle_ids ?? '[]'); } catch { ids = []; }
+  const results = answers.map((a, i) => ({
+    puzzleId: ids[a.puzzle_index] ?? `p${a.puzzle_index}`,
+    difficulty: null,
+    yourAnswer: a.submitted,
+    isCorrect: Boolean(a.is_correct),
+    msTaken: a.ms_taken,
+  }));
+  res.json({ status: 'failed', mode: mp.mode, livesLeft: 0, correctCount: answers.filter((a) => a.is_correct).length, totalCount: ids.length, results });
 });
 
 function maybePayReferrer(playerId) {
@@ -382,7 +407,7 @@ app.post('/api/hint', submitLimiter, requireAuth, (req, res) => {
   if (typeof matchId !== 'string' || matchId.length > 64) return res.status(400).json({ error: 'bad_match_id' });
   const out = hintPuzzle({ matchId, playerId: req.session.player_id, puzzleIndex });
   if (out.error) {
-    const code = { insufficient_diamonds: 402, hint_limit_reached: 409, already_answered: 409, match_closed: 409, not_your_match: 403, match_not_found_or_expired: 404, bad_index: 400 }[out.error] ?? 400;
+    const code = { insufficient_diamonds: 402, hint_limit_reached: 409, hints_forbidden_boss: 409, already_answered: 409, match_closed: 409, not_your_match: 403, match_not_found_or_expired: 404, bad_index: 400 }[out.error] ?? 400;
     return res.status(code).json(out);
   }
   res.json(out);
@@ -401,7 +426,33 @@ app.post('/api/skip', submitLimiter, requireAuth, (req, res) => {
   res.json(out);
 });
 
-// ── TOURNAMENT (entry costs diamonds only — never cash) ───────────────────
+// ── GAME FEEL: freeze-time powerup + campaign ──────────────────────────
+// Freeze Time (10 💎): pauses the visible countdown for 10s. Actual msTaken
+// still accrues — pressure relief, not score advantage.
+app.post('/api/freeze', submitLimiter, requireAuth, (req, res) => {
+  const { matchId, puzzleIndex } = req.body ?? {};
+  if (typeof matchId !== 'string' || matchId.length > 64) return res.status(400).json({ error: 'bad_match_id' });
+  const out = freezeTime({ matchId, playerId: req.session.player_id, puzzleIndex });
+  if (out.error) {
+    const code = { insufficient_diamonds: 402, match_closed: 409, not_your_match: 403, match_not_found_or_expired: 404, bad_index: 400, no_player: 404 }[out.error] ?? 400;
+    return res.status(code).json(out);
+  }
+  res.json(out);
+});
+
+app.get('/api/campaign', requireAuth, (req, res) => {
+  res.json(campaignStatus(req.session.player_id));
+});
+
+app.post('/api/campaign/start', submitLimiter, requireAuth, (req, res) => {
+  const caseNumber = req.body?.caseNumber;
+  const out = startCampaignCase({ playerId: req.session.player_id, caseNumber });
+  if (out.error) {
+    const code = { bad_case: 400, case_locked: 403, generation_failed: 500 }[out.error] ?? 400;
+    return res.status(code).json(out);
+  }
+  res.json(out);
+});
 function weekKey(now = new Date()) {
   const d = new Date(now);
   const day = (d.getUTCDay() + 6) % 7; // Monday=0
@@ -435,7 +486,7 @@ app.post('/api/tournament/enter', submitLimiter, requirePlayer, (req, res) => {
   if (existing && existing.status === 'active') {
     const entry = takeKey(existing.match_id);
     if (entry) {
-      return res.json({ matchId: existing.match_id, resumed: true, puzzles: entry.puzzles.map((p) => puzzlePayload(p)), parTimes: entry.puzzles.map(() => 0) });
+      return res.json({ matchId: existing.match_id, resumed: true, puzzles: entry.puzzles.map((p) => puzzlePayload(p)), parTimes: entry.puzzles.map(() => 0), lives: STARTING_LIVES });
     }
   }
   const out = transaction(() => {
@@ -454,7 +505,7 @@ app.post('/api/tournament/enter', submitLimiter, requirePlayer, (req, res) => {
     const code = { insufficient_diamonds: 402, no_player: 404 }[out.error] ?? 500;
     return res.status(code).json(out);
   }
-  res.json({ matchId: out.matchId, puzzles: out.puzzles, parTimes: out.parTimes });
+  res.json({ matchId: out.matchId, puzzles: out.puzzles, parTimes: out.parTimes, lives: out.lives });
 });
 
 app.get('/api/leaderboard/tournament', requireAuth, (req, res) => {
