@@ -741,3 +741,28 @@ body.skin-treasure .invite-card {
   80% { opacity: 1; }
   100% { opacity: 0; }
 }
+
+/* ── type-level banner ambience (dust drift + "?" pulse) ────────────────
+   Purely decorative, opacity/transform only (compositor-friendly), scoped
+   to banner SVGs (.scene-*), and frozen under prefers-reduced-motion. */
+.story-scene .bn-dust {
+  animation: bn-drift 8s ease-in-out infinite alternate;
+}
+.story-scene .bn-pulse {
+  animation: bn-pulse 3.2s ease-in-out infinite;
+}
+@keyframes bn-drift {
+  from { transform: translate(0, 0); opacity: var(--bo, 0.4); }
+  to { transform: translate(2.5px, -5px); opacity: calc(var(--bo, 0.4) * 1.8); }
+}
+@keyframes bn-pulse {
+  0%, 100% { opacity: var(--po, 1); transform: scale(1); }
+  50% { opacity: calc(var(--po, 1) * 1.5); transform: scale(1.045); }
+}
+/* SVG transform-origin fix: scale() around each element's own center. */
+.story-scene .bn-pulse { transform-box: fill-box; transform-origin: center; }
+@media (prefers-reduced-motion: reduce) {
+  .story-scene .bn-dust, .story-scene .bn-pulse { animation: none; }
+  /* browsers without transform-box would leave scaled ghosts */
+  .story-scene .bn-pulse { transform: none; }
+}

@@ -927,8 +927,10 @@ function sceneOrdering(s) {
     g.append(node('text', { x, y: y - 15, 'text-anchor': 'middle', fill: '#2a2a33', 'font-size': '7.5', 'font-weight': '700', text: LET[i] }));
   }
 
-  // flutter ribbons on the flagpole (per-clue ledger draw)
+  // flutter ribbons on the flagpole (per-clue ledger draw) — only place-
+  // bearing clues have pos; pairwise clues ("A before B") skip gracefully.
   for (const c of s.clues ?? []) {
+    if (!Number.isFinite(c.pos)) continue;
     const fl = j(2);
     g.append(node('path', { d: `M ${414 - c.pos * 9} ${128 + c.pos * 7.4} q 4 ${fl} 8 0`, stroke: '#e8ecf4', 'stroke-width': '1', fill: 'none', opacity: '0.4' }));
   }
@@ -955,6 +957,9 @@ const BANNER_W = 460;
 const BANNER_H = 170;
 
 // Seeded dust/star sprinkle shared by all banners (purely decorative).
+// Each mote gets a bn-dust class + randomized duration/negative delay so the
+// ambient drift never starts synchronized; CSS freezes it under
+// prefers-reduced-motion.
 function dust(g, seed, count, yMax, color = '#dfe8f4') {
   const rand = sceneRand(seed);
   for (let i = 0; i < count; i++) {
@@ -964,6 +969,8 @@ function dust(g, seed, count, yMax, color = '#dfe8f4') {
       r: rand() * 1.1 + 0.3,
       fill: color,
       opacity: String(rand() * 0.45 + 0.15),
+      class: 'bn-dust',
+      style: `--bo:${(rand() * 0.45 + 0.15).toFixed(2)};animation-duration:${(6 + rand() * 5).toFixed(2)}s;animation-delay:${(-rand() * 8).toFixed(2)}s;`,
     }));
   }
 }
@@ -993,7 +1000,7 @@ function bannerPattern() {
     const s = node('g', {});
     s.append(node('rect', { x: x - 13, y: 69, width: 26, height: 26, rx: 5, fill }));
     s.append(node('rect', { x: x - 8, y: 74, width: 10, height: 8, rx: 3, fill: '#fff', opacity: '0.15' }));
-    if (glow) s.append(node('circle', { cx: x, cy: 82, r: 26, fill: 'none', stroke: '#ffe28a', 'stroke-width': '2', 'stroke-dasharray': '5 4' }));
+    if (glow) s.append(node('circle', { cx: x, cy: 82, r: 26, fill: 'none', stroke: '#ffe28a', 'stroke-width': '2', 'stroke-dasharray': '5 4', class: 'bn-pulse', opacity: '0.75', style: '--po:0.75' }));
     return s;
   };
   g.append(tri(72, '#5fb3dd'), cir(128, '#3f9d63'), sq(184, '#c65b52'));
@@ -1035,7 +1042,7 @@ function bannerSequence() {
   // motion streaks behind the largest orb
   g.append(node('path', { d: 'M 322 76 q -8 -8 -20 -6 M 318 88 q -10 -4 -22 0', stroke: '#4cc9f0', 'stroke-width': '2', fill: 'none', opacity: '0.35', 'stroke-linecap': 'round' }));
   // dashed "next" ring
-  g.append(node('circle', { cx: 408, cy: 84, r: 22, fill: 'rgba(255,255,255,0.03)', stroke: '#ffe28a', 'stroke-width': '2', 'stroke-dasharray': '5 4' }));
+  g.append(node('circle', { cx: 408, cy: 84, r: 22, fill: 'rgba(255,255,255,0.03)', stroke: '#ffe28a', 'stroke-width': '2', 'stroke-dasharray': '5 4', class: 'bn-pulse', opacity: '0.75', style: '--po:0.75' }));
   g.append(node('text', { x: 408, y: 91, 'text-anchor': 'middle', fill: '#ffe28a', 'font-size': '19', 'font-weight': '700', text: '?' }));
   const [vd, vr] = vignette(BANNER_W, BANNER_H, 0.2);
   g.append(vd, vr);
@@ -1072,7 +1079,7 @@ function bannerMatrix() {
         'stroke-dasharray': missing ? '5 4' : undefined,
       }));
       if (missing) {
-        g.append(node('circle', { cx: x + cell / 2, cy: y + cell / 2, r: 20, fill: '#ffe28a', opacity: '0.08' }));
+        g.append(node('circle', { cx: x + cell / 2, cy: y + cell / 2, r: 20, fill: '#ffe28a', opacity: '0.08', class: 'bn-pulse', style: '--po:0.08' }));
         g.append(node('text', { x: x + cell / 2, y: y + cell / 2 + 7, 'text-anchor': 'middle', fill: '#ffe28a', 'font-size': '20', 'font-weight': '700', text: '?' }));
       } else {
         g.append(glyphs[(r * 3 + c) % 3](x, y));
@@ -1120,7 +1127,7 @@ function bannerDeduction() {
     g.append(node('ellipse', { cx: fx, cy: fy, rx: 5, ry: 8, fill: '#8b93a6', opacity: '0.3', transform: `rotate(${18 - i * 8} ${fx} ${fy})` }));
   }
   // question-mark chalk mark
-  g.append(node('text', { x: 66, y: 62, fill: '#8b93a6', 'font-size': '26', opacity: '0.35', 'font-weight': '700', text: '?' }));
+  g.append(node('text', { x: 66, y: 62, fill: '#8b93a6', 'font-size': '26', opacity: '0.35', 'font-weight': '700', text: '?', class: 'bn-pulse', style: '--po:0.35' }));
   const [vd, vr] = vignette(BANNER_W, BANNER_H, 0.22);
   g.append(vd, vr);
   return g;
@@ -1144,8 +1151,8 @@ function bannerConditional() {
       g.append(node('circle', { cx: ex, cy: ey, r: 17, fill: '#3f9d63' }));
       g.append(node('path', { d: `M ${ex - 7} ${ey} L ${ex - 2} ${ey + 6} L ${ex + 8} ${ey - 5}`, stroke: '#fff', 'stroke-width': '2.4', fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
     } else {
-      g.append(node('circle', { cx: ex, cy: ey, r: 17, fill: 'rgba(255,255,255,0.05)', stroke: '#e8dff2', 'stroke-width': '1.6', 'stroke-dasharray': '4 3' }));
-      g.append(node('text', { x: ex, y: ey + 6, 'text-anchor': 'middle', fill: '#e8dff2', 'font-size': '17', 'font-weight': '700', text: '?' }));
+      g.append(node('circle', { cx: ex, cy: ey, r: 17, fill: 'rgba(255,255,255,0.05)', stroke: '#e8dff2', 'stroke-width': '1.6', 'stroke-dasharray': '4 3', class: 'bn-pulse', opacity: '0.85', style: '--po:0.85' }));
+      g.append(node('text', { x: ex, y: ey + 6, 'text-anchor': 'middle', fill: '#e8dff2', 'font-size': '17', 'font-weight': '700', text: '?', class: 'bn-pulse', style: '--po:0.9' }));
     }
   };
   fork(336, 46, true);
@@ -1300,6 +1307,10 @@ const BANNERS = {
   operator: bannerOperator,
   spatial: bannerSpatial,
   mastermind: bannerMastermind,
+  // Insurance: these types normally always carry a scene payload; if one
+  // ever renders without one, show the closest banner rather than blank.
+  ordering: bannerSequence,
+  story: bannerDeduction,
 };
 
 // storyScene(puzzle): the illustration for ANY puzzle — never a blank.
