@@ -54,6 +54,10 @@ export function pct(x) {
 export function showScreen(id) {
   $$('.screen').forEach((s) => s.classList.add('hidden'));
   $(id).classList.remove('hidden');
+  // The shell wraps every in-app screen; if a shell screen is being shown,
+  // make sure the shell itself is unhidden (e.g. a screen shown before
+  // enterApp() ran, or a page resumed in an inconsistent state).
+  if ($(id).closest('#shell')) $('#shell').classList.remove('hidden');
   window.scrollTo(0, 0);
   // sync nav active states
   const map = { 'screen-home': 'home', 'screen-training': 'play', 'screen-game': 'play', 'screen-results': 'play', 'screen-campaign': 'campaign', 'screen-leaderboard': 'leaderboard', 'screen-profile': 'profile' };

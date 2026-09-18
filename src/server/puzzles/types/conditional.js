@@ -94,6 +94,18 @@ export function generateConditional(rng, difficulty) {
       options,
       correct: answerColor,
       explanation: `Apply the rules in order: ${chain.join('; ')}.`,
+      // Illustration payload: rule/fact STRUCTURE only (person indexes — the
+      // colors themselves never leave the server; the art shows blank "wears
+      // ?" slots). Draw ledger documented in sceneConditional (render.js) and
+      // must stay in sync: per rule a ribbon seed, per fact a pennant seed,
+      // per person a sparkle seed, then 2 torch seeds.
+      scene: {
+        kind: 'conditional',
+        rules: rules.map(([p, , q]) => [p, q]),
+        facts: facts.map(([p]) => p),
+        n,
+        rng: Math.floor(rng() * 4294967296),
+      },
       tags: ['conditional', 'forward-chaining'],
     };
   }

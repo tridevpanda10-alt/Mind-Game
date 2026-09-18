@@ -70,6 +70,16 @@ export function generateDeduction(rng, difficulty) {
       options,
       correct,
       explanation: `Checking every possibility, the consistent assignments are ${proof} — and flipping everyone keeps every statement consistent, so both a setup and its flip appear. In each of them, ${LETTERS[pi]} and ${LETTERS[pj]} have ${same ? 'the same type' : 'different types'}.`,
+      // Illustration payload: WHO speaks about WHOM (structure only — whether
+      // a speaker is knight or knave is the puzzle's answer, so the art draws
+      // blank K/N badges). Ambient placement derives from scene.rng; the draw
+      // ledger is documented in sceneDeduction (render.js) and must stay in
+      // sync: per islander x-jitter, bob, firefly x/y; then 2 tufts; 2 birds.
+      scene: {
+        kind: 'deduction',
+        statements: statements.map((st) => ({ s: st.speaker, about: st.subject, c: st.claimsTruthful })),
+        rng: Math.floor(rng() * 4294967296),
+      },
       tags: ['deduction', 'knights-and-knaves', 'same-or-different'],
     };
   }

@@ -159,6 +159,18 @@ export function generateOrdering(rng, difficulty) {
       options,
       correct,
       explanation,
+      // Illustration payload: clue structure + which position is asked. The
+      // ranking itself is NEVER shipped — the art's podium shows only places
+      // the clues state. Draw ledger documented in sceneOrdering (render.js)
+      // and must stay in sync: per clue a flutter seed, per runner a flag
+      // seed, then 2 tuft seeds.
+      scene: {
+        kind: 'ordering',
+        n,
+        clues: minimal.map((cl) => ({ id: cl.id, a: cl.a, b: cl.b, k: cl.k, pos: cl.pos })),
+        asked: pinned.pos,
+        rng: Math.floor(rng() * 4294967296),
+      },
       tags: ['ordering', 'elimination', models.length === 1 ? 'unique-ranking' : 'pinned-fact'],
     };
   }
