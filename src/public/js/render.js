@@ -944,19 +944,383 @@ function sceneOrdering(s) {
   return g;
 }
 
-// storyScene(puzzle): returns the SVG node for puzzle.scene, or null.
-// Generic dispatch: any payload kind with a matching painter renders; a
-// story payload without a painter returns null (caller falls back to text).
-export function storyScene(puzzle) {
-  if (!puzzle?.scene?.kind) return null;
-  switch (puzzle.scene.kind) {
-    case 'crow': return sceneCrow(puzzle.scene);
-    case 'cats': return sceneCats(puzzle.scene);
-    case 'rabbit': return sceneRabbit(puzzle.scene);
-    case 'owl': return sceneOwl(puzzle.scene);
-    case 'deduction': return sceneDeduction(puzzle.scene);
-    case 'conditional': return sceneConditional(puzzle.scene);
-    case 'ordering': return sceneOrdering(puzzle.scene);
-    default: return null;
+// ══ Type-level banner illustrations: one per abstract puzzle type ═════════
+// Every puzzle must show art: story puzzles use their scene painter, plain
+// types fall back to these signature banners keyed on puzzle.type. Same art
+// kit and direction as the story scenes (original inline SVG, no external
+// assets). Banners are shared by EVERY instance of a type, so they carry no
+// puzzle-specific data and can never reveal an answer.
+
+const BANNER_W = 460;
+const BANNER_H = 170;
+
+// Seeded dust/star sprinkle shared by all banners (purely decorative).
+function dust(g, seed, count, yMax, color = '#dfe8f4') {
+  const rand = sceneRand(seed);
+  for (let i = 0; i < count; i++) {
+    g.append(node('circle', {
+      cx: rand() * BANNER_W,
+      cy: rand() * yMax,
+      r: rand() * 1.1 + 0.3,
+      fill: color,
+      opacity: String(rand() * 0.45 + 0.15),
+    }));
   }
+}
+
+function bannerPattern() {
+  const g = sceneSvg('pattern', BANNER_W, BANNER_H,
+    skyGradient('patSky', [['0', '#1d1230'], ['1', '#33204a']]),
+    lightBeam('patBeam', '300,0 380,0 250,170 160,170', 340, 0, 205, 170, '#ffe9c2', 0.12),
+    node('rect', { x: 0, y: 0, width: BANNER_W, height: BANNER_H, fill: 'url(#patSky)' }),
+  );
+  dust(g, 101, 14, 110);
+  g.setAttribute('aria-label', 'Repeating geometric pattern illustration');
+  // shelf
+  g.append(node('line', { x1: 40, y1: 122, x2: 420, y2: 122, stroke: '#4a3862', 'stroke-width': '2', opacity: '0.7' }));
+  const tri = (x, fill, glow) => {
+    const t = node('g', {});
+    t.append(node('path', { d: `M ${x} 66 L ${x + 16} 94 L ${x - 16} 94 Z`, fill }));
+    t.append(node('path', { d: `M ${x} 70 L ${x + 8} 86 L ${x - 8} 86 Z`, fill: '#fff', opacity: '0.12' }));
+    if (glow) t.append(node('circle', { cx: x, cy: 84, r: 26, fill: 'none', stroke: '#ffe28a', 'stroke-width': '2', 'stroke-dasharray': '5 4' }));
+    return t;
+  };
+  const cir = (x, fill) => node('g', {},
+    node('circle', { cx: x, cy: 82, r: 15, fill }),
+    node('circle', { cx: x - 4, cy: 77, r: 5, fill: '#fff', opacity: '0.18' }),
+  );
+  const sq = (x, fill, glow) => {
+    const s = node('g', {});
+    s.append(node('rect', { x: x - 13, y: 69, width: 26, height: 26, rx: 5, fill }));
+    s.append(node('rect', { x: x - 8, y: 74, width: 10, height: 8, rx: 3, fill: '#fff', opacity: '0.15' }));
+    if (glow) s.append(node('circle', { cx: x, cy: 82, r: 26, fill: 'none', stroke: '#ffe28a', 'stroke-width': '2', 'stroke-dasharray': '5 4' }));
+    return s;
+  };
+  g.append(tri(72, '#5fb3dd'), cir(128, '#3f9d63'), sq(184, '#c65b52'));
+  g.append(tri(240, '#5fb3dd'), cir(296, '#3f9d63'));
+  // the "what comes next?" slot
+  g.append(sq(352, 'rgba(255,255,255,0.05)', true));
+  g.append(node('text', { x: 352, y: 88, 'text-anchor': 'middle', fill: '#ffe28a', 'font-size': '19', 'font-weight': '700', text: '?' }));
+  // echo motifs in the dark margins
+  g.append(node('circle', { cx: 424, cy: 46, r: 8, fill: '#5fb3dd', opacity: '0.25' }));
+  g.append(node('path', { d: 'M 40 40 l 7 12 h -14 Z', fill: '#3f9d63', opacity: '0.25' }));
+  const [vd, vr] = vignette(BANNER_W, BANNER_H, 0.2);
+  g.append(vd, vr);
+  return g;
+}
+
+function bannerSequence() {
+  const g = sceneSvg('sequence', BANNER_W, BANNER_H,
+    skyGradient('seqSky', [['0', '#0d1b2e'], ['1', '#2a4a6e']]),
+    lightBeam('seqBeam', '40,0 110,0 200,170 120,170', 75, 0, 160, 170, '#fff3d0', 0.1),
+    node('rect', { x: 0, y: 0, width: BANNER_W, height: BANNER_H, fill: 'url(#seqSky)' }),
+  );
+  dust(g, 202, 18, 120);
+  g.setAttribute('aria-label', 'Progression trail illustration');
+  // flowing trail curve
+  g.append(node('path', { d: 'M 52 118 C 130 40, 220 150, 300 70 S 400 60, 408 84', stroke: '#4cc9f0', 'stroke-width': '2.5', fill: 'none', opacity: '0.4', 'stroke-linecap': 'round' }));
+  // orbs grow along the trail
+  const orbs = [
+    { x: 52, y: 118, r: 6 },
+    { x: 122, y: 72, r: 9 },
+    { x: 196, y: 108, r: 12 },
+    { x: 272, y: 78, r: 15 },
+    { x: 344, y: 70, r: 18 },
+  ];
+  for (const o of orbs) {
+    g.append(node('circle', { cx: o.x, cy: o.y + o.r + 6, rx: o.r + 4, ry: 3, fill: '#000', opacity: '0.25' }));
+    g.append(node('circle', { cx: o.x, cy: o.y, r: o.r, fill: '#4cc9f0' }));
+    g.append(node('circle', { cx: o.x - o.r * 0.3, cy: o.y - o.r * 0.35, r: o.r * 0.32, fill: '#fff', opacity: '0.45' }));
+  }
+  // motion streaks behind the largest orb
+  g.append(node('path', { d: 'M 322 76 q -8 -8 -20 -6 M 318 88 q -10 -4 -22 0', stroke: '#4cc9f0', 'stroke-width': '2', fill: 'none', opacity: '0.35', 'stroke-linecap': 'round' }));
+  // dashed "next" ring
+  g.append(node('circle', { cx: 408, cy: 84, r: 22, fill: 'rgba(255,255,255,0.03)', stroke: '#ffe28a', 'stroke-width': '2', 'stroke-dasharray': '5 4' }));
+  g.append(node('text', { x: 408, y: 91, 'text-anchor': 'middle', fill: '#ffe28a', 'font-size': '19', 'font-weight': '700', text: '?' }));
+  const [vd, vr] = vignette(BANNER_W, BANNER_H, 0.2);
+  g.append(vd, vr);
+  return g;
+}
+
+function bannerMatrix() {
+  const g = sceneSvg('matrix', BANNER_W, BANNER_H,
+    skyGradient('mtxSky', [['0', '#1a2333'], ['1', '#2e3d52']]),
+    lightBeam('mtxBeam', '20,0 90,0 190,170 110,170', 55, 0, 150, 170, '#dfe8f4', 0.09),
+    node('rect', { x: 0, y: 0, width: BANNER_W, height: BANNER_H, fill: 'url(#mtxSky)' }),
+  );
+  dust(g, 303, 12, 110);
+  g.setAttribute('aria-label', 'Matrix grid illustration');
+  const cell = 42;
+  const gap = 8;
+  const ox = BANNER_W / 2 - (cell * 3 + gap * 2) / 2;
+  const oy = BANNER_H / 2 - (cell * 3 + gap * 2) / 2;
+  const glyphs = [
+    (x, y) => node('circle', { cx: x + cell / 2, cy: y + cell / 2, r: 9, fill: 'none', stroke: '#7da3c8', 'stroke-width': '2' }),
+    (x, y) => node('rect', { x: x + cell / 2 - 8, y: y + cell / 2 - 8, width: 16, height: 16, rx: 4, fill: 'none', stroke: '#7da3c8', 'stroke-width': '2' }),
+    (x, y) => node('path', { d: `M ${x + cell / 2} ${y + 9} L ${x + cell - 9} ${y + cell - 9} L ${x + 9} ${y + cell - 9} Z`, fill: 'none', stroke: '#7da3c8', 'stroke-width': '2' }),
+  ];
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) {
+      const x = ox + c * (cell + gap);
+      const y = oy + r * (cell + gap);
+      const missing = r === 2 && c === 2;
+      g.append(node('rect', {
+        x, y, width: cell, height: cell, rx: 9,
+        fill: missing ? 'rgba(255,255,255,0.04)' : 'rgba(125,163,200,0.10)',
+        stroke: missing ? '#ffe28a' : 'rgba(125,163,200,0.4)',
+        'stroke-width': missing ? '2' : '1.2',
+        'stroke-dasharray': missing ? '5 4' : undefined,
+      }));
+      if (missing) {
+        g.append(node('circle', { cx: x + cell / 2, cy: y + cell / 2, r: 20, fill: '#ffe28a', opacity: '0.08' }));
+        g.append(node('text', { x: x + cell / 2, y: y + cell / 2 + 7, 'text-anchor': 'middle', fill: '#ffe28a', 'font-size': '20', 'font-weight': '700', text: '?' }));
+      } else {
+        g.append(glyphs[(r * 3 + c) % 3](x, y));
+      }
+    }
+  }
+  // side accents
+  g.append(node('circle', { cx: 424, cy: 128, r: 10, fill: 'none', stroke: '#7da3c8', 'stroke-width': '1.6', opacity: '0.4' }));
+  g.append(node('rect', { x: 30, y: 34, width: 14, height: 14, rx: 4, fill: 'none', stroke: '#7da3c8', 'stroke-width': '1.6', opacity: '0.4' }));
+  const [vd, vr] = vignette(BANNER_W, BANNER_H, 0.2);
+  g.append(vd, vr);
+  return g;
+}
+
+function bannerDeduction() {
+  const g = sceneSvg('deduction-type', BANNER_W, BANNER_H,
+    skyGradient('dedTSky', [['0', '#14161d'], ['1', '#2a2d3a']]),
+    node('rect', { x: 0, y: 0, width: BANNER_W, height: BANNER_H, fill: 'url(#dedTSky)' }),
+  );
+  g.setAttribute('aria-label', 'Detective deduction illustration');
+  // desk-lamp cone of light from upper left
+  g.append(lightBeam('dedTLamp', '30,0 96,0 250,170 120,170', 62, 0, 185, 170, '#ffe9c2', 0.14));
+  dust(g, 404, 12, 110, '#ffe9c2');
+  // case-file lines on the desk (right side)
+  for (let i = 0; i < 4; i++) {
+    g.append(node('line', { x1: 330 + (i % 2) * 6, y1: 40 + i * 16, x2: 428 - (i % 2) * 10, y2: 40 + i * 16, stroke: '#8b93a6', 'stroke-width': '2', opacity: '0.3', 'stroke-linecap': 'round' }));
+  }
+  // magnifying glass
+  const lens = node('g', { transform: `translate(196, 78) rotate(-28)` });
+  lens.append(node('circle', { cx: 0, cy: 0, r: 34, fill: '#ffdf9e', opacity: '0.14' }));
+  lens.append(node('circle', { cx: 0, cy: 0, r: 30, fill: 'none', stroke: '#caa15e', 'stroke-width': '7' }));
+  lens.append(node('circle', { cx: 0, cy: 0, r: 30, fill: 'none', stroke: '#8a6a3f', 'stroke-width': '2', opacity: '0.7' }));
+  lens.append(node('circle', { cx: -9, cy: -10, r: 12, fill: '#fff', opacity: '0.14' }));
+  // fingerprint arcs under the glass
+  const fp = [[0, 14, 9], [0, 14, 16], [0, 14, 22]];
+  for (const [, , r] of fp) {
+    lens.append(node('path', { d: `M ${-r} 14 A ${r} ${r} 0 0 1 ${r} 14`, stroke: '#8b93a6', 'stroke-width': '1.6', fill: 'none', opacity: '0.5' }));
+  }
+  lens.append(node('rect', { x: 24, y: 24, width: 12, height: 52, rx: 6, fill: '#8a6a3f', transform: 'rotate(45 30 30)' }));
+  g.append(lens);
+  // footprint trail (the classic detective motif)
+  for (let i = 0; i < 4; i++) {
+    const fx = 60 + i * 22;
+    const fy = 138 - i * 9;
+    g.append(node('ellipse', { cx: fx, cy: fy, rx: 5, ry: 8, fill: '#8b93a6', opacity: '0.3', transform: `rotate(${18 - i * 8} ${fx} ${fy})` }));
+  }
+  // question-mark chalk mark
+  g.append(node('text', { x: 66, y: 62, fill: '#8b93a6', 'font-size': '26', opacity: '0.35', 'font-weight': '700', text: '?' }));
+  const [vd, vr] = vignette(BANNER_W, BANNER_H, 0.22);
+  g.append(vd, vr);
+  return g;
+}
+
+function bannerConditional() {
+  const g = sceneSvg('conditional-type', BANNER_W, BANNER_H,
+    skyGradient('conTSky', [['0', '#241432'], ['1', '#58325e']]),
+    lightBeam('conTBeam', '20,0 80,0 160,170 60,170', 50, 0, 110, 170, '#ffd9a8', 0.09),
+    node('rect', { x: 0, y: 0, width: BANNER_W, height: BANNER_H, fill: 'url(#conTSky)' }),
+  );
+  dust(g, 505, 14, 100, '#f2e4ff');
+  g.setAttribute('aria-label', 'Branching if-then paths illustration');
+  // source node (IF)
+  g.append(node('circle', { cx: 84, cy: 85, r: 16, fill: '#ffd98e' }));
+  g.append(node('circle', { cx: 84, cy: 85, r: 22, fill: 'none', stroke: '#ffd98e', 'stroke-width': '1.4', opacity: '0.4' }));
+  // two forks
+  const fork = (ex, ey, ok) => {
+    g.append(node('path', { d: `M 102 80 C 170 ${ok ? 30 : 140}, 250 ${ok ? 38 : 132}, ${ex - 20} ${ey}`, stroke: '#f2a9d4', 'stroke-width': '2.4', fill: 'none', opacity: '0.55' }));
+    if (ok) {
+      g.append(node('circle', { cx: ex, cy: ey, r: 17, fill: '#3f9d63' }));
+      g.append(node('path', { d: `M ${ex - 7} ${ey} L ${ex - 2} ${ey + 6} L ${ex + 8} ${ey - 5}`, stroke: '#fff', 'stroke-width': '2.4', fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+    } else {
+      g.append(node('circle', { cx: ex, cy: ey, r: 17, fill: 'rgba(255,255,255,0.05)', stroke: '#e8dff2', 'stroke-width': '1.6', 'stroke-dasharray': '4 3' }));
+      g.append(node('text', { x: ex, y: ey + 6, 'text-anchor': 'middle', fill: '#e8dff2', 'font-size': '17', 'font-weight': '700', text: '?' }));
+    }
+  };
+  fork(336, 46, true);
+  fork(336, 124, false);
+  // arrowheads mid-path
+  g.append(node('path', { d: 'M 216 40 l -4 9 l 10 1 Z', fill: '#f2a9d4', opacity: '0.7' }));
+  g.append(node('path', { d: 'M 216 130 l -4 -9 l 10 -1 Z', fill: '#f2a9d4', opacity: '0.7' }));
+  // THEN pennant near source
+  g.append(node('text', { x: 120, y: 60, fill: '#d8c8e2', 'font-size': '11', opacity: '0.8', text: 'if … then' }));
+  const [vd, vr] = vignette(BANNER_W, BANNER_H, 0.2);
+  g.append(vd, vr);
+  return g;
+}
+
+function bannerNumber() {
+  const g = sceneSvg('number-type', BANNER_W, BANNER_H,
+    skyGradient('numSky', [['0', '#141230'], ['1', '#332a55']]),
+    lightBeam('numBeam', '300,0 370,0 250,170 150,170', 335, 0, 200, 170, '#ffe9c2', 0.1),
+    node('rect', { x: 0, y: 0, width: BANNER_W, height: BANNER_H, fill: 'url(#numSky)' }),
+  );
+  dust(g, 606, 14, 110, '#e8dff2');
+  g.setAttribute('aria-label', 'Abstract numerals illustration');
+  // ghost depth-stacked numerals (decorative, no real sequence)
+  const digit = (x, y, s, rot, main) => {
+    const d = node('g', { transform: `translate(${x}, ${y}) rotate(${rot}) scale(${s})` });
+    for (const [dx, dy, fill, op] of main
+      ? [[3, 3, '#0c0920', 0.6], [0, 0, '#ffd98e', 1]]
+      : [[2, 2, '#0c0920', 0.5], [0, 0, '#8f7ab8', 0.55]]) {
+      d.append(node('text', { x: dx, y: dy, 'text-anchor': 'middle', fill, 'font-size': '64', 'font-weight': '800', opacity: String(op), text: main ? '8' : '3' }));
+    }
+    return d;
+  };
+  g.append(digit(120, 118, 0.9, -8, false));
+  g.append(digit(352, 70, 0.62, 10, false));
+  g.append(digit(238, 104, 1.15, -3, true));
+  // abacus arc of beads along the bottom
+  g.append(node('line', { x1: 60, y1: 142, x2: 400, y2: 142, stroke: '#8f7ab8', 'stroke-width': '2.4', opacity: '0.5' }));
+  const bead = ['#c65b52', '#3f9d63', '#5fb3dd', '#ffd98e', '#c65b52', '#3f9d63', '#5fb3dd'];
+  bead.forEach((fill, i) => {
+    g.append(node('circle', { cx: 88 + i * 34, cy: 142, r: 9, fill }));
+    g.append(node('circle', { cx: 85 + i * 34, cy: 139, r: 3, fill: '#fff', opacity: '0.3' }));
+  });
+  const [vd, vr] = vignette(BANNER_W, BANNER_H, 0.2);
+  g.append(vd, vr);
+  return g;
+}
+
+function bannerOperator() {
+  const g = sceneSvg('operator-type', BANNER_W, BANNER_H,
+    skyGradient('oprSky', [['0', '#12201c'], ['1', '#1e342c']]),
+    lightBeam('oprBeam', '40,0 110,0 210,170 120,170', 75, 0, 165, 170, '#d9f2e4', 0.08),
+    node('rect', { x: 0, y: 0, width: BANNER_W, height: BANNER_H, fill: 'url(#oprSky)' }),
+  );
+  dust(g, 707, 20, 120, '#d9f2e4');
+  g.setAttribute('aria-label', 'Floating math operators illustration');
+  const sym = (x, y, s, rot, ch, color) => {
+    const t = node('g', { transform: `translate(${x}, ${y}) rotate(${rot}) scale(${s})` });
+    t.append(node('text', { x: 0, y: 0, 'text-anchor': 'middle', fill: color, 'font-size': '44', 'font-weight': '800', opacity: '0.9', text: ch }));
+    return t;
+  };
+  g.append(sym(96, 84, 0.8, -12, '+', '#7dd6b8'));
+  g.append(sym(178, 60, 0.6, 8, '−', '#e8ecf4'));
+  g.append(sym(258, 92, 0.9, -5, '×', '#e8b36a'));
+  g.append(sym(342, 58, 0.65, 14, '÷', '#7dd6b8'));
+  g.append(sym(404, 106, 0.5, -10, '+', '#e8ecf4'));
+  // chalk stick + eraser at the bottom rail
+  g.append(node('line', { x1: 50, y1: 140, x2: 410, y2: 140, stroke: '#3a5548', 'stroke-width': '3', opacity: '0.6' }));
+  g.append(node('rect', { x: 150, y: 132, width: 34, height: 7, rx: 3.5, fill: '#f2ede0', opacity: '0.85', transform: 'rotate(-4 167 135)' }));
+  g.append(node('rect', { x: 250, y: 131, width: 26, height: 9, rx: 2, fill: '#c65b52', opacity: '0.7' }));
+  // chalk dust puffs
+  for (const [dx, dy] of [[196, 136], [204, 130], [292, 136]]) {
+    g.append(node('circle', { cx: dx, cy: dy, r: 1.6, fill: '#f2ede0', opacity: '0.5' }));
+  }
+  const [vd, vr] = vignette(BANNER_W, BANNER_H, 0.2);
+  g.append(vd, vr);
+  return g;
+}
+
+function bannerSpatial() {
+  const g = sceneSvg('spatial-type', BANNER_W, BANNER_H,
+    skyGradient('spaSky', [['0', '#0e1c30'], ['1', '#1a3050']]),
+    node('rect', { x: 0, y: 0, width: BANNER_W, height: BANNER_H, fill: 'url(#spaSky)' }),
+  );
+  g.setAttribute('aria-label', 'Isometric geometry illustration');
+  // blueprint grid
+  for (let x = 20; x < BANNER_W; x += 28) g.append(node('line', { x1: x, y1: 0, x2: x, y2: BANNER_H, stroke: '#2c4a6e', 'stroke-width': '0.7', opacity: '0.4' }));
+  for (let y = 16; y < BANNER_H; y += 28) g.append(node('line', { x1: 0, y1: y, x2: BANNER_W, y2: y, stroke: '#2c4a6e', 'stroke-width': '0.7', opacity: '0.4' }));
+  // isometric cube
+  const cube = node('g', { transform: `translate(214, 82)` });
+  cube.append(node('path', { d: 'M 0 -42 L 40 -20 L 0 2 L -40 -20 Z', fill: '#4cc9f0', opacity: '0.85' }));
+  cube.append(node('path', { d: 'M -40 -20 L 0 2 L 0 50 L -40 28 Z', fill: '#2a7ba6' }));
+  cube.append(node('path', { d: 'M 40 -20 L 0 2 L 0 50 L 40 28 Z', fill: '#1c5578' }));
+  cube.append(node('path', { d: 'M 0 -42 L 40 -20 L 0 2 Z', fill: '#fff', opacity: '0.12' }));
+  cube.append(node('path', { d: 'M 0 -42 L 40 -20 M 0 -42 L -40 -20 M 0 2 L 0 50 M -40 -20 L -40 28 M 40 -20 L 40 28', stroke: '#bfe6f7', 'stroke-width': '1.2', fill: 'none', opacity: '0.7' }));
+  g.append(cube);
+  g.append(node('ellipse', { cx: 214, cy: 142, rx: 52, ry: 8, fill: '#000', opacity: '0.3' }));
+  // dashed fold axis + small wireframe pyramid
+  g.append(node('line', { x1: 320, y1: 40, x2: 320, y2: 130, stroke: '#bfe6f7', 'stroke-width': '1.4', 'stroke-dasharray': '5 4', opacity: '0.6' }));
+  const pyr = node('g', { transform: `translate(368, 96)` });
+  pyr.append(node('path', { d: 'M 0 -26 L 24 16 L -24 16 Z', fill: 'none', stroke: '#bfe6f7', 'stroke-width': '1.6', opacity: '0.8' }));
+  pyr.append(node('path', { d: 'M 0 -26 L 0 16 M -24 16 L 24 16', stroke: '#bfe6f7', 'stroke-width': '1', opacity: '0.45' }));
+  g.append(pyr);
+  dust(g, 808, 8, 150, '#bfe6f7');
+  const [vd, vr] = vignette(BANNER_W, BANNER_H, 0.2);
+  g.append(vd, vr);
+  return g;
+}
+
+function bannerMastermind() {
+  const g = sceneSvg('mastermind-type', BANNER_W, BANNER_H,
+    skyGradient('mmSky', [['0', '#1f1216'], ['1', '#3a1f28']]),
+    lightBeam('mmBeam', '300,0 370,0 250,170 150,170', 335, 0, 200, 170, '#ffe9c2', 0.1),
+    node('rect', { x: 0, y: 0, width: BANNER_W, height: BANNER_H, fill: 'url(#mmSky)' }),
+  );
+  dust(g, 909, 12, 110, '#f2e0d0');
+  g.setAttribute('aria-label', 'Code-breaking lock illustration');
+  // radiating glow + shield with keyhole
+  g.append(node('circle', { cx: 150, cy: 82, r: 52, fill: '#ffd98e', opacity: '0.07' }));
+  const shield = node('g', { transform: `translate(150, 82)` });
+  shield.append(node('path', { d: 'M 0 -34 C 14 -26, 26 -24, 32 -24 C 32 6, 22 28, 0 40 C -22 28, -32 6, -32 -24 C -26 -24, -14 -26, 0 -34 Z', fill: '#4a2c35', stroke: '#caa15e', 'stroke-width': '2.4' }));
+  shield.append(node('circle', { cx: 0, cy: -4, r: 9, fill: '#ffd98e' }));
+  shield.append(node('path', { d: 'M -4 0 L 4 0 L 7 20 L -7 20 Z', fill: '#ffd98e' }));
+  shield.append(node('path', { d: 'M -26 -18 C -12 -24, 12 -24, 26 -18', stroke: '#fff', 'stroke-width': '1.6', fill: 'none', opacity: '0.18' }));
+  g.append(shield);
+  // peg row (metallic neutrals — deliberately not the game's guess colors)
+  const pegs = [['#b87333', 'bronze'], ['#c9ccd6', 'silver'], ['#ffd98e', 'gold'], ['#6e4a52', 'rose']];
+  pegs.forEach(([fill], i) => {
+    const x = 268 + i * 40;
+    g.append(node('ellipse', { cx: x, cy: 112, rx: 13, ry: 4, fill: '#000', opacity: '0.3' }));
+    g.append(node('circle', { cx: x, cy: 96, r: 14, fill }));
+    g.append(node('circle', { cx: x - 4, cy: 91, r: 5, fill: '#fff', opacity: '0.4' }));
+  });
+  // small key bottom-right
+  const key = node('g', { transform: `translate(400, 136) rotate(-18)` });
+  key.append(node('circle', { cx: -16, cy: 0, r: 7, fill: 'none', stroke: '#caa15e', 'stroke-width': '3' }));
+  key.append(node('line', { x1: -9, y1: 0, x2: 16, y2: 0, stroke: '#caa15e', 'stroke-width': '3' }));
+  key.append(node('line', { x1: 10, y1: 0, x2: 10, y2: 5, stroke: '#caa15e', 'stroke-width': '3' }));
+  key.append(node('line', { x1: 15, y1: 0, x2: 15, y2: 4, stroke: '#caa15e', 'stroke-width': '3' }));
+  g.append(key);
+  const [vd, vr] = vignette(BANNER_W, BANNER_H, 0.2);
+  g.append(vd, vr);
+  return g;
+}
+
+const BANNERS = {
+  pattern: bannerPattern,
+  sequence: bannerSequence,
+  matrix: bannerMatrix,
+  deduction: bannerDeduction,
+  conditional: bannerConditional,
+  number: bannerNumber,
+  operator: bannerOperator,
+  spatial: bannerSpatial,
+  mastermind: bannerMastermind,
+};
+
+// storyScene(puzzle): the illustration for ANY puzzle — never a blank.
+// 1. puzzle.scene → its story painter (verified answer-free payloads).
+// 2. else → the type-level banner for puzzle.type (shared by every instance
+//    of the type, so it cannot carry instance data).
+// Returns null only if neither exists (unknown kind/type) — callers already
+// handle null by falling back to text-only rendering.
+export function storyScene(puzzle) {
+  if (puzzle?.scene?.kind) {
+    switch (puzzle.scene.kind) {
+      case 'crow': return sceneCrow(puzzle.scene);
+      case 'cats': return sceneCats(puzzle.scene);
+      case 'rabbit': return sceneRabbit(puzzle.scene);
+      case 'owl': return sceneOwl(puzzle.scene);
+      case 'deduction': return sceneDeduction(puzzle.scene);
+      case 'conditional': return sceneConditional(puzzle.scene);
+      case 'ordering': return sceneOrdering(puzzle.scene);
+      default: break;
+    }
+  }
+  const banner = BANNERS[puzzle?.type];
+  return banner ? banner() : null;
 }
