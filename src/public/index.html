@@ -56,6 +56,7 @@
         <div class="brand small">
           <span class="brand-mark" aria-hidden="true"></span>
           <span class="brand-name">Mind Game</span>
+          <span class="brand-tagline">Think · Solve · Rise</span>
         </div>
         <nav aria-label="Main">
           <button class="nav-btn" data-nav="home">Home</button>
@@ -72,6 +73,17 @@
       <main id="main">
         <!-- HOME -->
         <section id="screen-home" class="screen hidden" aria-label="Home">
+          <!-- Animated hero backdrop: layered, decorative, non-interactive -->
+          <div id="homeHero" class="home-hero" aria-hidden="true">
+            <div class="hh-layer hh-sky"></div>
+            <div class="hh-layer hh-glow"></div>
+            <div class="hh-layer hh-ridge hh-ridge-far"></div>
+            <div class="hh-layer hh-ridge hh-ridge-near"></div>
+            <div class="hh-layer hh-trees hh-trees-far"></div>
+            <div class="hh-layer hh-trees hh-trees-near"></div>
+            <div class="hh-layer hh-motes"></div>
+            <div class="hh-layer hh-magnifier"></div>
+          </div>
           <div id="mascot" class="mascot" aria-hidden="true"></div>
           <header class="home-head">
             <div>
@@ -170,41 +182,72 @@
         <!-- GAME -->
         <section id="screen-game" class="screen hidden" aria-label="Puzzle">
           <div class="game-stage" id="gameStage">
-            <header class="game-head">
-              <button class="btn ghost small" id="exitMatch">Exit</button>
-              <div class="game-meta">
-                <span id="gameMode" class="pill"></span>
-                <span id="gameProgress"></span>
-                <span id="gameType" class="pill subtle"></span>
-                <span id="gameDiff" class="pill subtle"></span>
+            <!-- Top bar: brand + live stats + quick actions -->
+            <header class="game-topbar">
+              <div class="gtb-brand">
+                <span class="brand-mark" aria-hidden="true"></span>
+                <div class="gtb-brand-text">
+                  <span class="gtb-wordmark">Mind Game</span>
+                  <span class="gtb-tagline">Think · Solve · Rise</span>
+                </div>
               </div>
-              <div class="hud-right">
-                <div id="livesWrap" class="lives" aria-label="Lives remaining" hidden></div>
-                <div id="streakChip" class="streak-chip" hidden><span id="streakCount"></span></div>
-                <div class="timer" id="gameTimer" role="timer" aria-label="Time remaining">0:00</div>
+              <div class="gtb-stats">
+                <div class="stat-pill" id="statLevel">
+                  <span class="stat-ico" aria-hidden="true">★</span>
+                  <div class="stat-body">
+                    <span class="stat-label">Level <b id="statLevelN">–</b></span>
+                    <div class="xpbar" role="progressbar" aria-label="Level progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="xpBar"><div class="xpbar-fill" id="xpFill"></div></div>
+                    <span class="stat-sub" id="xpText"></span>
+                  </div>
+                </div>
+                <div class="stat-pill" id="streakChip" hidden><span class="stat-ico" aria-hidden="true">🔥</span><b id="streakCount"></b></div>
+                <div class="stat-pill" id="statRating"><span class="stat-ico" aria-hidden="true">✦</span><span class="stat-label">Rating</span> <b id="statRatingN">–</b><span id="statRatingDelta" class="rating-delta" hidden></span></div>
+                <div class="stat-pill" id="statTime"><span class="stat-ico" aria-hidden="true">◷</span><span class="stat-label">Time</span><div class="timer" id="gameTimer" role="timer" aria-label="Time remaining">0:00</div></div>
+                <div class="stat-pill" id="statDiamonds"><span class="stat-ico" aria-hidden="true">💎</span><b id="gameDiamonds">–</b></div>
+              </div>
+              <div class="gtb-actions">
+                <button class="icon-btn" id="hudSound" type="button" aria-label="Toggle music" aria-pressed="true">♪</button>
+                <button class="icon-btn" id="hudSettings" type="button" aria-label="Settings and profile">⚙</button>
               </div>
             </header>
             <div class="timer-bar-wrap" aria-hidden="true"><div class="timer-bar" id="timerBar"></div></div>
             <div id="comboHost" class="combo-host" aria-live="polite"></div>
-            <div class="game-body">
-              <p class="question" id="qText"></p>
-              <div id="qVisual"></div>
-              <div id="options" class="options"></div>
-              <div id="answerInputWrap" class="hidden">
-                <input type="text" id="answerInput" maxlength="64" autocomplete="off" />
+            <div class="puzzle-card">
+                <div class="pc-top">
+                  <button class="icon-btn back" id="exitMatch" type="button" aria-label="Exit match">‹</button>
+                  <div class="game-meta">
+                    <span id="gameMode" class="pill"></span>
+                    <span id="gameProgress"></span>
+                    <span id="gameType" class="pill subtle"></span>
+                    <span id="gameDiff" class="pill subtle"></span>
+                  </div>
+                  <div id="livesWrap" class="lives" aria-label="Lives remaining" hidden></div>
+                </div>
+                <div class="game-body">
+                  <p class="question" id="qText"></p>
+                  <div id="qVisual"></div>
+                  <div id="options" class="options"></div>
+                  <div id="answerInputWrap" class="hidden">
+                    <input type="text" id="answerInput" maxlength="64" autocomplete="off" />
+                  </div>
+                </div>
+                <div id="hintBox" class="hint-box" hidden>
+                  <span class="hint-bulb" aria-hidden="true">💡</span>
+                  <span id="hintText"></span>
+                </div>
+                <footer class="game-foot">
+                  <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
+                  <div class="row gap">
+                    <button class="btn subtle" id="hintBtn" type="button">Use Hint (5 💎)</button>
+                    <button class="btn subtle" id="skipBtn" type="button">Skip Clue (15 💎)</button>
+                    <button class="btn subtle" id="freezeBtn" type="button">Freeze Time (10 💎)</button>
+                  </div>
+                  <button class="btn primary" id="submitBtn">Submit</button>
+                  <button class="btn primary" id="nextBtn" hidden>Next puzzle</button>
+                  <button class="btn primary" id="finishBtn" hidden>See results</button>
+                </footer>
               </div>
             </div>
-            <footer class="game-foot">
-              <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
-              <div class="row gap">
-                <button class="btn subtle" id="hintBtn" type="button">Use Hint (5 💎)</button>
-                <button class="btn subtle" id="skipBtn" type="button">Skip Clue (15 💎)</button>
-                <button class="btn subtle" id="freezeBtn" type="button">Freeze Time (10 💎)</button>
-              </div>
-              <button class="btn primary" id="submitBtn">Submit</button>
-              <button class="btn primary" id="nextBtn" hidden>Next puzzle</button>
-              <button class="btn primary" id="finishBtn" hidden>See results</button>
-            </footer>
           </div>
         </section>
 

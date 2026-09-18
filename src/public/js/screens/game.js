@@ -7,7 +7,7 @@ import { api, getDiamonds, setDiamonds } from '../api.js';
 import { $, $$, el, showScreen, fmtClock, fmtMs, toast, spinner } from '../ui.js';
 import { renderQuestion, renderOption, typeLabel, storyScene } from '../render.js';
 import { theme, matchTheme, campaignTheme } from '../theme.js';
-import { sfxCorrect, sfxWrong, sfxCombo, vibrate } from '../sfx.js';
+import { sfxCorrect, sfxWrong, sfxCombo, vibrate, getMusicEnabled, setMusicEnabled } from '../sfx.js';
 
 const COMBO_THRESHOLD = 3; // first "🔥 Combo!" popup fires at this streak
 const REDUCED_MOTION = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
@@ -30,6 +30,7 @@ const state = {
   lives: 0, // 0 = no lives mode (training/campaign)
   boss: false,
   streak: 0,
+  lastRatingDelta: null, // last rating change this session (HUD delta chip)
   frozenUntil: 0, // performance.now() timestamp while Freeze Time is active
   freezeActive: false,
 };
@@ -129,10 +130,15 @@ function renderLives() {
 
 // ── combo (Phase 2) ────────────────────────────────────────────────────────
 function renderStreak() {
+  paintStreakPill();
+}
+
+function paintStreakPill() {
   const chip = $('#streakChip');
+  if (!chip) return;
   if (state.streak >= 2) {
     chip.hidden = false;
-    $('#streakCount').textContent = `🔥 ${state.streak}×`;
+    $('#streakCount').textContent = `${state.streak}×`;
   } else {
     chip.hidden = true;
   }
@@ -187,6 +193,76 @@ function updateEconomyButtons() {
   freezeBtn.hidden = alreadyAnswered || state.lives <= 0;
   freezeBtn.disabled = state.freezeActive || balance < 10;
   freezeBtn.textContent = state.freezeActive ? '❄ Frozen' : 'Freeze Time (10 💎)';
+  // Redesigned HUD: the diamond balance lives beside the Hint/Skip actions.
+  const diamondsPill = $('#statDiamonds');
+  if (diamondsPill) {
+    $('#gameDiamonds').textContent = String(balance);
+    diamondsPill.classList.toggle('low', balance < g.hintCost);
+  }
+}
+
+// ── redesigned HUD: top-bar stats + sound shortcut ──────────────────────────
+// All values come from the same sources the home screen uses (server /api/me
+// via app.js for the player, server-validated match state for the rest).
+let hudPlayer = null;
+export function setHudPlayer(me) {
+  hudPlayer = me || null;
+  paintHudPlayer();
+}
+
+function paintHudPlayer() {
+  const lvl = $('#statLevelN');
+  if (!lvl) return;
+  if (!hudPlayer) {
+    lvl.textContent = '–';
+    $('#statRatingN').textContent = '–';
+    $('#xpFill').style.width = '0%';
+    $('#xpText').textContent = '';
+    return;
+  }
+  lvl.textContent = String(hudPlayer.level ?? '–');
+  $('#statRatingN').textContent = String(hudPlayer.rating ?? '–');
+  const prog = hudPlayer.levelProgress;
+  if (prog && prog.needed > 0) {
+    const pct = Math.max(0, Math.min(100, Math.round((prog.into / prog.needed) * 100)));
+    $('#xpFill').style.width = `${pct}%`;
+    $('#xpBar').setAttribute('aria-valuenow', String(pct));
+    $('#xpText').textContent = `${prog.into} / ${prog.needed} XP`;
+  } else {
+    $('#xpFill').style.width = '0%';
+    $('#xpText').textContent = '';
+  }
+  const delta = $('#statRatingDelta');
+  if (typeof state.lastRatingDelta === 'number' && state.mode !== 'training') {
+    delta.hidden = false;
+    delta.textContent = state.lastRatingDelta > 0 ? `+${state.lastRatingDelta}` : state.lastRatingDelta < 0 ? String(state.lastRatingDelta) : '±0';
+    delta.classList.toggle('up', state.lastRatingDelta > 0);
+    delta.classList.toggle('down', state.lastRatingDelta < 0);
+  } else {
+    delta.hidden = true;
+  }
+}
+
+// Sound shortcut: mirrors the profile sliders (same store, same setter).
+function paintHudSound() {
+  const btn = $('#hudSound');
+  const on = getMusicEnabled();
+  btn.textContent = on ? '♪' : '♪̶';
+  btn.setAttribute('aria-pressed', String(on));
+  btn.setAttribute('aria-label', on ? 'Music on — turn off' : 'Music off — turn on');
+}
+
+function initHud() {
+  if (initHud.done) return;
+  initHud.done = true;
+  $('#hudSound').addEventListener('click', () => {
+    setMusicEnabled(!getMusicEnabled());
+    paintHudSound();
+  });
+  $('#hudSettings').addEventListener('click', () => {
+    import('../screens/profile.js').then((m) => m.goProfile());
+  });
+  paintHudSound();
 }
 
 export async function startMatch(mode, opts = {}) {
@@ -212,6 +288,7 @@ export async function startMatch(mode, opts = {}) {
     state.lives = out.lives ?? 0;
     state.boss = Boolean(out.boss);
     state.streak = 0;
+    state.lastRatingDelta = null;
     sessionStorage.setItem('cra_match', JSON.stringify({ matchId: out.matchId, mode, index: 0 }));
     if (typeof out.diamonds === 'number') setDiamonds(out.diamonds);
     showIntro(mode, () => {
@@ -234,6 +311,8 @@ function renderPuzzle() {
   const p = state.puzzles[state.index];
   const ct = campaignTheme();
   $('#failedResultsBtn')?.remove(); // stale fail-outcome button from a previous puzzle/match
+  initHud();
+  paintHudPlayer();
   $('#gameMode').textContent = state.mode === 'campaign' ? ct.modeLabel : theme.match.modeLabel[state.mode] ?? 'Case';
   $('#gameMode').classList.toggle('boss-badge', state.boss);
   // Reuse the existing index/length progress state; theme supplies the wording.
@@ -279,6 +358,7 @@ function renderPuzzle() {
 
   $('#feedback').textContent = '';
   $('#feedback').className = 'feedback';
+  $('#hintBox').hidden = true; // fresh puzzle, fresh hint state
   $('#submitBtn').hidden = false;
   $('#submitBtn').disabled = true;
   $('#nextBtn').hidden = true;
@@ -333,6 +413,14 @@ async function useHint() {
         }
       }
     });
+    // Hint-preview box: the server eliminates one wrong option; restate it
+    // with the affected letter so the box matches what just happened.
+    const hintIdx = p.options.findIndex((o) => optId(o) === String(out.eliminate));
+    const hintBox = $('#hintBox');
+    if (hintBox) {
+      hintBox.hidden = false;
+      $('#hintText').textContent = `${g.hintTooltip ?? 'Hint'}${hintIdx >= 0 ? ` — option ${'ABCD'[hintIdx] ?? hintIdx + 1} is not the answer.` : '.'}`;
+    }
     toast('One wrong option eliminated.');
     updateEconomyButtons();
   } catch (err) {
@@ -514,6 +602,7 @@ export function exitMatch() {
 }
 
 export function initGame({ onResults }) {
+  initHud();
   $('#submitBtn').addEventListener('click', submitCurrent);
   $('#nextBtn').addEventListener('click', advance);
   $('#finishBtn').addEventListener('click', finish);

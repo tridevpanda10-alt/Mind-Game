@@ -677,7 +677,7 @@ body.skin-treasure .invite-card {
 .diff-btn.toggle.on { border-color: rgba(76, 201, 240, 0.5); color: var(--text); }
 
 /* ── per-difficulty gameplay backgrounds (compose with the skin layer) ── */
-.game-stage { position: relative; border-radius: 12px; padding: 6px 10px 2px; }
+.game-stage { position: relative; border-radius: 12px; }
 .game-stage::before {
   content: ''; position: absolute; inset: -12px; z-index: -1; border-radius: 18px;
   pointer-events: none; opacity: 0.5; transition: background 0.6s ease;
@@ -690,6 +690,229 @@ body.skin-treasure .invite-card {
 .game-stage[data-diff='master']::before { background: linear-gradient(140deg, rgba(255, 80, 90, 0.17), rgba(122, 31, 160, 0.12) 55%, transparent); animation: diff-intense 3.2s ease-in-out infinite alternate; }
 @keyframes diff-calm { from { transform: scale(1); } to { transform: scale(1.06); } }
 @keyframes diff-intense { from { transform: scale(1.02); opacity: 0.55; } to { transform: scale(1.09); opacity: 0.8; } }
+
+/* ── redesigned gameplay chrome: top bar + split panels ─────────────── */
+.game-topbar {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 10px 16px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--line);
+}
+.gtb-brand { display: flex; align-items: center; gap: 10px; min-width: 150px; }
+.gtb-brand-text { display: flex; flex-direction: column; line-height: 1.15; }
+.gtb-wordmark { font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.95rem; }
+.gtb-tagline { font-size: 0.66rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); }
+.gtb-stats { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1; justify-content: center; }
+.stat-pill {
+  display: flex; align-items: center; gap: 7px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 6px 11px; min-height: 34px;
+}
+.stat-pill[hidden] { display: none; } /* flex display must not defeat the hidden attribute */
+.stat-pill .stat-ico { opacity: 0.85; }
+.stat-pill .stat-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.stat-pill b { font-size: 0.95rem; }
+.stat-pill.low { border-color: rgba(255, 107, 122, 0.45); }
+.stat-pill .streak-chip { border: none; background: none; padding: 0; animation: none; }
+.stat-body { display: flex; flex-direction: column; gap: 2px; min-width: 110px; }
+.xpbar { width: 110px; height: 5px; border-radius: 999px; background: var(--hover-wash); overflow: hidden; }
+.xpbar-fill { height: 100%; width: 0%; border-radius: 999px; background: var(--accent); transition: width 0.5s ease; }
+.stat-sub { font-size: 0.66rem; color: var(--muted); }
+.rating-delta { font-size: 0.78rem; font-weight: 700; }
+.rating-delta.up { color: var(--good); }
+.rating-delta.down { color: var(--bad); }
+.gtb-actions { display: flex; align-items: center; gap: 6px; }
+.icon-btn {
+  width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 10px; border: 1px solid var(--line); background: var(--card);
+  color: var(--text); font-size: 1rem; cursor: pointer; padding: 0;
+}
+.icon-btn:hover { background: var(--hover-wash); }
+.icon-btn.back { font-size: 1.3rem; line-height: 1; padding-bottom: 4px; }
+
+/* puzzle card (single column under the top bar) */
+.puzzle-card {
+  display: flex; flex-direction: column; gap: 10px;
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin: 14px 16px 16px;
+}
+.pc-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pc-top .game-meta { flex: 1; }
+.hint-box {
+  display: flex; gap: 9px; align-items: flex-start;
+  background: rgba(255, 226, 138, 0.08);
+  border: 1px solid rgba(255, 226, 138, 0.35);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 0.88rem;
+}
+.hint-box[hidden] { display: none; }
+.hint-bulb { flex: 0 0 auto; }
+
+/* distinct circular letter badges per option (pure CSS on existing markup) */
+.options .opt { display: flex; align-items: center; gap: 10px; }
+.options .opt .opt-mark {
+  flex: 0 0 auto;
+  width: 26px; height: 26px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.8rem; font-weight: 700; color: #0b0e14;
+  margin-right: 0;
+}
+.options .opt:nth-child(4n + 1) .opt-mark { background: #4cc9f0; }
+.options .opt:nth-child(4n + 2) .opt-mark { background: #56d9a4; }
+.options .opt:nth-child(4n + 3) .opt-mark { background: #ffd98e; }
+.options .opt:nth-child(4n + 4) .opt-mark { background: #f2a9d4; }
+.opt.grid-opt .opt-mark { display: none; }
+
+/* narrow screens: keep the top bar useful */
+@media (max-width: 860px) {
+  .gtb-stats { justify-content: flex-start; }
+  .stat-pill .stat-sub { display: none; }
+  .xpbar { width: 80px; }
+  .game-topbar { padding: 8px 10px; }
+  .puzzle-card { margin: 10px 10px 12px; }
+  .gtb-brand-text .gtb-tagline { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xpbar-fill { transition: none; }
+}
+
+/* ── home hero: layered animated backdrop (CSS-only, decorative) ─────── */
+/* Sits behind the home cards: absolutely positioned layers inside
+   #screen-home, no layout participation, pointer-events: none. Tints use
+   theme vars so world skins shift the mood for free. Frozen under
+   prefers-reduced-motion (single composed frame). */
+#screen-home { position: relative; overflow: hidden; }
+.home-hero {
+  position: absolute;
+  inset: -40px 0 0 0; /* bleed past the top edge; sides clip at .screen padding */
+  z-index: 0;
+  pointer-events: none;
+}
+.home-hero ~ * { position: relative; z-index: 1; } /* cards float above */
+.hh-layer { position: absolute; inset: 0; }
+
+/* night sky wash + drifting nebula tint */
+.hh-sky {
+  background:
+    radial-gradient(120% 90% at 78% -12%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 58%),
+    radial-gradient(90% 70% at 8% 108%, color-mix(in srgb, var(--accent2) 14%, transparent), transparent 60%),
+    linear-gradient(180deg, rgba(12, 21, 38, 0.92), rgba(16, 28, 48, 0.55) 55%, transparent);
+  background-size: 100% 100%, 100% 100%, 100% 100%;
+  background-position: 0 0, 0 0, 0 0;
+  animation: hh-sky-breathe 14s ease-in-out infinite alternate;
+}
+@keyframes hh-sky-breathe {
+  from { filter: brightness(1) saturate(1); }
+  to { filter: brightness(1.18) saturate(1.12); }
+}
+
+/* rotating aurora glow */
+.hh-glow {
+  background:
+    radial-gradient(46% 34% at 70% 26%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%),
+    radial-gradient(38% 30% at 24% 62%, color-mix(in srgb, var(--accent2) 18%, transparent), transparent 72%);
+  filter: blur(6px);
+  transform-origin: 70% 26%;
+  animation: hh-glow-spin 26s linear infinite;
+  opacity: 0.9;
+}
+@keyframes hh-glow-spin {
+  from { transform: rotate(0deg) scale(1); }
+  to { transform: rotate(360deg) scale(1.08); }
+}
+
+/* parallax ridges: two data-URI SVG hills drifting slowly apart */
+.hh-ridge {
+  background-repeat: repeat-x;
+  background-position: 0 100%;
+  bottom: 0; top: auto;
+  height: 46%;
+}
+.hh-ridge-far {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='240' viewBox='0 0 640 240'%3E%3Cpath d='M0 240 L0 150 Q 80 96 170 138 Q 240 168 320 128 Q 410 84 500 134 Q 570 168 640 124 L 640 240 Z' fill='%231b2f45' fill-opacity='0.5'/%3E%3C/svg%3E");
+  background-size: 640px 100%;
+  animation: hh-drift-far 70s linear infinite;
+  opacity: 0.85;
+}
+.hh-ridge-near {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='560' height='220' viewBox='0 0 560 220'%3E%3Cpath d='M0 220 L0 150 Q 90 112 180 148 Q 260 178 350 140 Q 450 98 560 150 L 560 220 Z' fill='%23203a2c' fill-opacity='0.62'/%3E%3C/svg%3E");
+  background-size: 560px 100%;
+  animation: hh-drift-near 44s linear infinite;
+}
+@keyframes hh-drift-far { from { background-position-x: 0; } to { background-position-x: -640px; } }
+@keyframes hh-drift-near { from { background-position-x: 0; } to { background-position-x: -560px; } }
+
+/* treelines: repeating radial-gradient pines (left-right seamless) */
+.hh-trees { bottom: 0; top: auto; height: 30%; }
+.hh-trees-far {
+  background-image:
+    radial-gradient(26px 44px at 30px 100%, rgba(10, 24, 18, 0.75), transparent 62%),
+    radial-gradient(20px 34px at 92px 100%, rgba(10, 24, 18, 0.6), transparent 62%),
+    radial-gradient(30px 50px at 168px 100%, rgba(10, 24, 18, 0.7), transparent 62%),
+    radial-gradient(18px 30px at 232px 100%, rgba(10, 24, 18, 0.55), transparent 62%);
+  background-size: 260px 100%;
+  background-repeat: repeat-x;
+  background-position: 0 100%;
+  animation: hh-drift-trees-far 58s linear infinite;
+}
+.hh-trees-near {
+  background-image:
+    radial-gradient(34px 58px at 40px 100%, rgba(6, 14, 10, 0.85), transparent 62%),
+    radial-gradient(24px 40px at 120px 100%, rgba(6, 14, 10, 0.7), transparent 62%),
+    radial-gradient(40px 66px at 210px 100%, rgba(6, 14, 10, 0.8), transparent 62%);
+  background-size: 300px 100%;
+  background-repeat: repeat-x;
+  background-position: 0 100%;
+  animation: hh-drift-trees-near 34s linear infinite;
+}
+@keyframes hh-drift-trees-far { from { background-position-x: 0; } to { background-position-x: -260px; } }
+@keyframes hh-drift-trees-near { from { background-position-x: 0; } to { background-position-x: -300px; } }
+
+/* dust motes: layered radial-gradient fields drifting upward, twinkling */
+.hh-motes {
+  background-image:
+    radial-gradient(1.6px 1.6px at 12% 30%, rgba(255, 233, 168, 0.8), transparent 60%),
+    radial-gradient(1.2px 1.2px at 28% 66%, rgba(255, 233, 168, 0.5), transparent 60%),
+    radial-gradient(1.8px 1.8px at 44% 18%, rgba(255, 233, 168, 0.7), transparent 60%),
+    radial-gradient(1.1px 1.1px at 61% 52%, rgba(223, 232, 244, 0.55), transparent 60%),
+    radial-gradient(1.7px 1.7px at 76% 26%, rgba(255, 233, 168, 0.65), transparent 60%),
+    radial-gradient(1.2px 1.2px at 88% 70%, rgba(223, 232, 244, 0.5), transparent 60%),
+    radial-gradient(1.5px 1.5px at 8% 82%, rgba(255, 233, 168, 0.6), transparent 60%),
+    radial-gradient(1.4px 1.4px at 52% 84%, rgba(223, 232, 244, 0.45), transparent 60%);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  animation: hh-motes-drift 19s ease-in-out infinite alternate, hh-motes-twinkle 5.5s ease-in-out infinite;
+  opacity: 0.9;
+}
+@keyframes hh-motes-drift {
+  from { background-position: 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0; transform: translateY(0); }
+  to { background-position: 0 -34px, 0 -26px, 0 -40px, 0 -22px, 0 -38px, 0 -24px, 0 -30px, 0 -36px; transform: translateY(6px); }
+}
+@keyframes hh-motes-twinkle { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.95; } }
+
+/* detective silhouette: slow-panning magnifier glint */
+.hh-magnifier {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90' viewBox='0 0 90 90'%3E%3Cg transform='rotate(-28 45 45)'%3E%3Ccircle cx='38' cy='38' r='22' fill='none' stroke='%23caa15e' stroke-opacity='0.16' stroke-width='5'/%3E%3Crect x='52' y='52' width='9' height='26' rx='4.5' fill='%238a6a3f' fill-opacity='0.14' transform='rotate(45 52 52)'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 12% 30%;
+  opacity: 0.9;
+  animation: hh-glint-pan 30s ease-in-out infinite alternate;
+}
+@keyframes hh-glint-pan {
+  0% { background-position: 10% 26%; opacity: 0.5; }
+  50% { opacity: 0.95; }
+  100% { background-position: 82% 20%; opacity: 0.55; }
+}
+
+/* reduced motion: freeze every layer on its composed first frame */
+@media (prefers-reduced-motion: reduce) {
+  .hh-layer, .hh-sky, .hh-glow, .hh-ridge, .hh-trees, .hh-motes, .hh-magnifier { animation: none; }
+}
 
 /* ── settings sliders (music / SFX volume) ─────────────────────────── */
 .slider-row .slider-controls { display: flex; align-items: center; gap: 8px; min-width: 180px; }
