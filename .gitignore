@@ -12,4 +12,12 @@ Thumbs.db
 dist/
 coverage/
 
+# Freebuff session artifacts and the accidentally-cloned nested repo
+# (Mind game/ holds an obsolete Sept-13 clone of this same GitHub repo;
+# its only files are older copies of files already tracked at root).
+.freebuff/
+freebuff/
+project-id
+Mind game/
+
 .vercel
