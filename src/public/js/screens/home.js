@@ -46,6 +46,8 @@ export async function goHome() {
     renderDiamonds();
     $('#chipRating').textContent = me.rating;
     $('#chipLevel').textContent = me.level;
+    // Feed the redesigned game-screen HUD from the same server data.
+    try { const { setHudPlayer } = await import('./game.js'); setHudPlayer(me); } catch { /* HUD is optional */ }
     dailyAvailable = daily.available;
 
     const pill = $('#dailyPill');

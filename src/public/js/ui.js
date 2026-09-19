@@ -51,6 +51,8 @@ export function pct(x) {
   return x == null ? '–' : `${Math.round(x * 100)}%`;
 }
 
+import { hydrateIcons } from './icons.js';
+
 export function showScreen(id) {
   $$('.screen').forEach((s) => s.classList.add('hidden'));
   $(id).classList.remove('hidden');
@@ -63,4 +65,7 @@ export function showScreen(id) {
   const map = { 'screen-home': 'home', 'screen-training': 'play', 'screen-game': 'play', 'screen-results': 'play', 'screen-campaign': 'campaign', 'screen-leaderboard': 'leaderboard', 'screen-profile': 'profile' };
   const active = map[id.replace('#', '')];
   $$('.nav-btn, .bnav').forEach((b) => b.classList.toggle('active', b.dataset.nav === active));
+  // Icon hydration is idempotent; running it here covers buttons that were
+  // built dynamically since the last screen change.
+  hydrateIcons();
 }

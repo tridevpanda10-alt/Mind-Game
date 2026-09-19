@@ -946,6 +946,167 @@ function sceneOrdering(s) {
   return g;
 }
 
+// ══ Game-screen backdrop: one composed fable scene ═════════════════════
+// Original inline SVG (no external assets) reusing the story art kit: night
+// forest composed of simplified reprises of the four fables (owl, crow+pot,
+// cats+monkey, rabbit+wolf) around a glade with an open case file. Purely
+// atmospheric — never contains puzzle data.
+export function gameBackdrop() {
+  const W = 460;
+  const H = 520;
+  const groundY = 360;
+  const rand = sceneRand(90210);
+  const g = sceneSvg('backdrop', W, H,
+    skyGradient('gbSky', [
+      ['0', '#0c1526'],
+      ['0.55', '#1c3050'],
+      ['1', '#2a4a6e'],
+    ]),
+    // moon + halo
+    node('circle', { cx: 372, cy: 74, r: 40, fill: '#f4ecd8', opacity: '0.08' }),
+    node('circle', { cx: 372, cy: 74, r: 24, fill: '#f7ead0', opacity: '0.95' }),
+    node('circle', { cx: 364, cy: 68, r: 18, fill: '#fff', opacity: '0.12' }),
+    // scattered stars
+    ...Array.from({ length: 22 }, () => node('circle', { cx: rand() * W, cy: rand() * 220, r: rand() * 1.2 + 0.3, fill: '#dfe8f4', opacity: String(rand() * 0.5 + 0.15) })),
+    lightBeam('gbBeam', '240,0 330,0 200,520 60,520', 285, 0, 130, 520, '#ffe9c2', 0.09),
+    node('rect', { x: 0, y: 0, width: W, height: H, fill: 'url(#gbSky)' }),
+    // distant ridges
+    node('path', { d: `M 0 250 Q 90 218 190 244 T 380 240 T 460 248 L 460 400 L 0 400 Z`, fill: '#223a2c', opacity: '0.55' }),
+    node('path', { d: `M 0 300 Q 120 270 230 292 T 460 296 L 460 420 L 0 420 Z`, fill: '#2a4a34', opacity: '0.6' }),
+    // glade floor
+    node('rect', { x: 0, y: groundY, width: W, height: H - groundY, fill: '#33513b' }),
+    node('rect', { x: 0, y: groundY, width: W, height: 3, fill: '#5d7c4d', opacity: '0.5' }),
+    node('path', { d: `M 130 ${H} Q 180 ${groundY + 30} 240 ${groundY + 26} Q 320 ${groundY + 20} 360 ${H} Z`, fill: '#3d5f45', opacity: '0.5' }),
+    // tree-line: layered pines left and right
+    pine(26, groundY + 26, 1.5, '#1d3222', '#43613f'),
+    pine(70, groundY + 8, 1.15, '#223a26', '#4a6b45'),
+    pine(108, groundY + 30, 0.9, '#1d3222', '#43613f'),
+    pine(404, groundY + 28, 1.45, '#1d3222', '#43613f'),
+    pine(360, groundY + 6, 1.05, '#223a26', '#4a6b45'),
+    pine(430, groundY + 10, 0.85, '#1d3222', '#43613f'),
+  );
+
+  // ── vignette 1: owl on branch, upper left ──
+  const owl = node('g', { transform: 'translate(88, 118)' });
+  owl.append(node('path', { d: 'M -64 8 Q 0 -8 64 4', stroke: '#4a3826', 'stroke-width': '7', fill: 'none', 'stroke-linecap': 'round' }));
+  owl.append(node('ellipse', { cx: 0, cy: 0, rx: 17, ry: 21, fill: '#6b5136' }));
+  owl.append(node('ellipse', { cx: 0, cy: 4, rx: 12, ry: 14, fill: '#d9c9a8' }));
+  for (const dx of [-5, 0, 5]) owl.append(node('circle', { cx: dx, cy: 2 + Math.abs(dx) * 0.2, r: 1.4, fill: '#8a7350' }));
+  owl.append(node('path', { d: 'M -17 -6 Q 0 -18 17 -6 Q 8 -12 0 -11 Q -8 -12 -17 -6 Z', fill: '#5a4330' }));
+  owl.append(node('circle', { cx: -6, cy: -6, r: 4.4, fill: '#f2e6c8' }));
+  owl.append(node('circle', { cx: 6, cy: -6, r: 4.4, fill: '#f2e6c8' }));
+  owl.append(node('circle', { cx: -6, cy: -6, r: 2, fill: '#2b241a' }));
+  owl.append(node('circle', { cx: 6, cy: -6, r: 2, fill: '#2b241a' }));
+  owl.append(node('circle', { cx: -5.2, cy: -6.8, r: 0.7, fill: '#fff' }));
+  owl.append(node('circle', { cx: 6.8, cy: -6.8, r: 0.7, fill: '#fff' }));
+  owl.append(node('path', { d: 'M -2 -2 L 0 1 L 2 -2 Z', fill: '#e2a93b' }));
+  owl.append(node('path', { d: 'M -8 -14 l -3 -5 M 8 -14 l 3 -5', stroke: '#5a4330', 'stroke-width': '2', 'stroke-linecap': 'round' }));
+  g.append(owl);
+
+  // ── vignette 2: crow beside the matka, mid left ──
+  const potX = 92;
+  const potY = groundY + 66;
+  const pot = node('g', {});
+  pot.append(node('ellipse', { cx: potX, cy: potY + 2, rx: 30, ry: 5, fill: '#0e2418', opacity: '0.45' }));
+  pot.append(node('path', { d: `M ${potX - 10} ${potY - 40} C ${potX - 28} ${potY - 16}, ${potX - 30} ${potY + 8}, ${potX - 22} ${potY} L ${potX + 22} ${potY} C ${potX + 30} ${potY + 8}, ${potX + 28} ${potY - 16}, ${potX + 10} ${potY - 40} Z`, fill: '#b0623a' }));
+  pot.append(node('path', { d: `M ${potX - 10} ${potY - 40} C ${potX - 20} ${potY - 16}, ${potX - 20} ${potY + 2}, ${potX - 14} ${potY} L ${potX - 4} ${potY} C ${potX - 10} ${potY - 18}, ${potX - 10} ${potY - 22}, ${potX - 4} ${potY - 40} Z`, fill: '#c97a4c', opacity: '0.8' }));
+  pot.append(node('rect', { x: potX - 13, y: potY - 46, width: 26, height: 9, rx: 4, fill: '#8f4d2c' }));
+  pot.append(node('ellipse', { cx: potX, cy: potY - 42, rx: 9, ry: 3, fill: '#3a2113' }));
+  g.append(pot);
+  const crow = node('g', { transform: `translate(${potX + 44}, ${potY - 14})` });
+  crow.append(node('ellipse', { cx: 0, cy: 10, rx: 13, ry: 2.5, fill: '#0e2418', opacity: '0.4' }));
+  crow.append(node('ellipse', { cx: 0, cy: 0, rx: 13, ry: 8, fill: '#1a1e26' }));
+  crow.append(node('ellipse', { cx: -2, cy: -2, rx: 8, ry: 4.5, fill: '#2e3848', opacity: '0.55' }));
+  crow.append(node('circle', { cx: 10, cy: -6, r: 5.5, fill: '#1a1e26' }));
+  crow.append(node('circle', { cx: 11.5, cy: -7.5, r: 1.6, fill: '#f4ecd8' }));
+  crow.append(node('circle', { cx: 12.2, cy: -7.5, r: 0.8, fill: '#10131a' }));
+  crow.append(node('path', { d: 'M 15 -6 l 7 1.6 l -7 2.6 z', fill: '#e2a93b' }));
+  crow.append(node('path', { d: 'M -4 7 l -2 6 M 4 7 l 2 6', stroke: '#caa15e', 'stroke-width': '2', 'stroke-linecap': 'round' }));
+  g.append(crow);
+
+  // ── vignette 3: cats + monkey judge, mid right ──
+  const trio = node('g', { transform: `translate(348, ${groundY + 44})` });
+  trio.append(node('ellipse', { cx: 0, cy: 14, rx: 40, ry: 5, fill: '#0e2418', opacity: '0.4' }));
+  const miniCat = (x, flip) => {
+    const c = node('g', { transform: `translate(${x}, 0) scale(${flip ? -1 : 1}, 1)` });
+    c.append(node('ellipse', { cx: 0, cy: 0, rx: 12, ry: 8, fill: '#b58a56' }));
+    c.append(node('circle', { cx: 10, cy: -7, r: 6.5, fill: '#b58a56' }));
+    c.append(node('path', { d: 'M 6 -12 l -1.5 -5 l 4 2.5 Z M 13 -12.5 l 2 -4.5 l 2 4.5 Z', fill: '#b58a56' }));
+    c.append(node('path', { d: 'M -12 2 q -6 2 -5 8', stroke: '#b58a56', 'stroke-width': '3', fill: 'none', 'stroke-linecap': 'round' }));
+    c.append(node('circle', { cx: 12, cy: -8, r: 0.9, fill: '#2b241a' }));
+    c.append(node('circle', { cx: 8.5, cy: -8, r: 0.9, fill: '#2b241a' }));
+    return c;
+  };
+  trio.append(miniCat(-20, false));
+  trio.append(miniCat(22, true));
+  // roti between them
+  trio.append(node('ellipse', { cx: 1, cy: 9, rx: 10, ry: 3.5, fill: '#e2c894' }));
+  trio.append(node('ellipse', { cx: -2, cy: 8, rx: 4, ry: 1.4, fill: '#f2e2bc', opacity: '0.8' }));
+  // monkey judge perched above
+  const monk = node('g', { transform: 'translate(0, -34)' });
+  monk.append(node('ellipse', { cx: 0, cy: 6, rx: 9, ry: 11, fill: '#8a6a48' }));
+  monk.append(node('ellipse', { cx: 0, cy: 8, rx: 5.5, ry: 6.5, fill: '#d9b98c' }));
+  monk.append(node('circle', { cx: 0, cy: -8, r: 7.5, fill: '#8a6a48' }));
+  monk.append(node('ellipse', { cx: 0, cy: -6.5, rx: 4.6, ry: 4, fill: '#d9b98c' }));
+  monk.append(node('circle', { cx: -2, cy: -8, r: 1, fill: '#2b241a' }));
+  monk.append(node('circle', { cx: 2, cy: -8, r: 1, fill: '#2b241a' }));
+  monk.append(node('path', { d: 'M 8 -2 q 8 4 6 12', stroke: '#8a6a48', 'stroke-width': '3.5', fill: 'none', 'stroke-linecap': 'round' }));
+  trio.append(monk);
+  g.append(trio);
+
+  // ── vignette 4: rabbit + wolf, lower right chase ──
+  const rabbit = node('g', { transform: `translate(300, ${groundY + 106})` });
+  rabbit.append(node('ellipse', { cx: 0, cy: 8, rx: 14, ry: 3, fill: '#0e2418', opacity: '0.4' }));
+  rabbit.append(node('ellipse', { cx: 0, cy: 0, rx: 12, ry: 8, fill: '#c9b8a0' }));
+  rabbit.append(node('circle', { cx: 9, cy: -5, r: 5.5, fill: '#c9b8a0' }));
+  rabbit.append(node('path', { d: 'M 6 -9 q -1 -8 2 -10 q 2 6 1 10 Z M 11 -9 q 2 -7 5 -8 q 0 6 -2 10 Z', fill: '#c9b8a0' }));
+  rabbit.append(node('path', { d: 'M 6.5 -10 q -0.5 -5 1 -7 M 12 -10 q 1.5 -5 3.5 -6', stroke: '#e8cba8', 'stroke-width': '1.6', fill: 'none', 'stroke-linecap': 'round' }));
+  rabbit.append(node('circle', { cx: -11, cy: 2, r: 3.5, fill: '#f2ede2' }));
+  rabbit.append(node('circle', { cx: 11, cy: -6, r: 1, fill: '#2b241a' }));
+  rabbit.append(node('path', { d: 'M -6 7 l -2 4 M 0 8 l 0 4 M 6 7 l 2 4', stroke: '#a89880', 'stroke-width': '2', 'stroke-linecap': 'round' }));
+  g.append(rabbit);
+  const wolf = node('g', { transform: `translate(392, ${groundY + 96})` });
+  wolf.append(node('ellipse', { cx: 0, cy: 10, rx: 20, ry: 4, fill: '#0e2418', opacity: '0.45' }));
+  wolf.append(node('ellipse', { cx: 0, cy: 0, rx: 19, ry: 10, fill: '#6e7480' }));
+  wolf.append(node('path', { d: 'M 12 -4 L 24 -9 L 22 1 Z', fill: '#6e7480' }));
+  wolf.append(node('path', { d: 'M 14 -4 l 8 -3 l -1.5 5 Z', fill: '#4a4f58' }));
+  wolf.append(node('path', { d: 'M 6 -8 l 2 -6 l 4 4 Z M 12 -8 l 3 -5 l 3 4 Z', fill: '#5a606b' }));
+  wolf.append(node('path', { d: 'M -18 0 q -8 -2 -10 6 q 6 3 12 -2 Z', fill: '#5a606b' }));
+  wolf.append(node('circle', { cx: 19, cy: -6, r: 1.2, fill: '#ffd98e' }));
+  wolf.append(node('path', { d: 'M -8 9 l -1.5 5 M 0 10 l 0 5 M 8 9 l 1.5 5', stroke: '#4a4f58', 'stroke-width': '2.6', 'stroke-linecap': 'round' }));
+  g.append(wolf);
+
+  // ── center: open case file with magnifier ──
+  const file = node('g', { transform: `translate(190, ${groundY + 78})` });
+  file.append(node('ellipse', { cx: 0, cy: 12, rx: 34, ry: 5, fill: '#0e2418', opacity: '0.45' }));
+  file.append(node('path', { d: 'M -30 8 L 0 0 L 30 8 L 30 2 L 0 -6 L -30 2 Z', fill: '#8a6a48' }));
+  file.append(node('path', { d: 'M -28 4 L 0 -3 L 28 4 L 28 16 Q 0 10 -28 16 Z', fill: '#e8dcbe' }));
+  file.append(node('path', { d: 'M 0 -3 L 0 9', stroke: '#b8a67c', 'stroke-width': '1.2' }));
+  for (let i = 0; i < 3; i++) file.append(node('line', { x1: -22, y1: 3 + i * 4, x2: -6, y2: 0 + i * 4, stroke: '#a89468', 'stroke-width': '1', opacity: '0.7' }));
+  for (let i = 0; i < 3; i++) file.append(node('line', { x1: 6, y1: 0 + i * 4, x2: 22, y2: 3 + i * 4, stroke: '#a89468', 'stroke-width': '1', opacity: '0.7' }));
+  const mag = node('g', { transform: 'translate(20, -12) rotate(-24)' });
+  mag.append(node('circle', { cx: 0, cy: 0, r: 9, fill: '#ffdf9e', opacity: '0.2' }));
+  mag.append(node('circle', { cx: 0, cy: 0, r: 8, fill: 'none', stroke: '#caa15e', 'stroke-width': '2.4' }));
+  mag.append(node('rect', { x: 6, y: 6, width: 3.4, height: 13, rx: 1.7, fill: '#8a6a3f', transform: 'rotate(45 7.7 7.7)' }));
+  file.append(mag);
+  g.append(file);
+
+  // grass tufts + fireflies + caption-free (caption is HTML overlay)
+  for (const [tx, ty] of [[150, groundY + 30], [210, groundY + 118], [330, groundY + 30], [60, groundY + 120], [420, groundY + 60]]) {
+    g.append(bladeTuft(tx, ty, 0.9 + rand() * 0.5, '#4c6a3a'));
+  }
+  for (let i = 0; i < 7; i++) {
+    const fx = 60 + rand() * 340;
+    const fy = 180 + rand() * 240;
+    g.append(node('circle', { cx: fx, cy: fy, r: 3.4, fill: '#ffe28a', opacity: '0.12' }));
+    g.append(node('circle', { cx: fx, cy: fy, r: 1.2, fill: '#ffe9a8', opacity: '0.8' }));
+  }
+  const [vd, vr] = vignette(W, H, 0.28);
+  g.append(vd, vr);
+  g.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+  return g;
+}
+
 // ══ Type-level banner illustrations: one per abstract puzzle type ═════════
 // Every puzzle must show art: story puzzles use their scene painter, plain
 // types fall back to these signature banners keyed on puzzle.type. Same art

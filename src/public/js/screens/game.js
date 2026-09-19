@@ -8,6 +8,16 @@ import { $, $$, el, showScreen, fmtClock, fmtMs, toast, spinner } from '../ui.js
 import { renderQuestion, renderOption, typeLabel, storyScene } from '../render.js';
 import { theme, matchTheme, campaignTheme } from '../theme.js';
 import { sfxCorrect, sfxWrong, sfxCombo, vibrate, getMusicEnabled, setMusicEnabled } from '../sfx.js';
+import { iconSvg } from '../icons.js';
+
+// Icon-first buttons: prepend the glyph; textContent updates below must
+// re-prepend it since writing textContent clears children.
+function withIcon(sel, name) {
+  const btn = $(sel);
+  if (!btn || btn.querySelector(':scope > svg.icon')) return;
+  const svg = iconSvg(name);
+  if (svg) btn.prepend(svg);
+}
 
 const COMBO_THRESHOLD = 3; // first "🔥 Combo!" popup fires at this streak
 const REDUCED_MOTION = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
@@ -161,6 +171,7 @@ function showIntro(mode, beginFn, campaignCase = null) {
     $('#introFlavor').textContent = campaignCase.boss ? c.bossBody : c.mapBody;
     $('#introMeta').textContent = `${state.puzzles.length} clues · ${campaignCase.boss ? 'boss case' : `difficulty ≈ ${campaignCase.difficulty}`}`;
     $('#introBegin').textContent = c.beginButton;
+    withIcon('#introBegin', 'play');
     document.querySelector('#screen-intro .intro-card').classList.toggle('boss', campaignCase.boss);
   } else {
     $('#introTitle').textContent = t.title;
@@ -169,6 +180,7 @@ function showIntro(mode, beginFn, campaignCase = null) {
       ? `${state.puzzles.length} ${t.noun}${state.puzzles.length === 1 ? '' : 's'} · one ${t.noun} at a time`
       : '';
     $('#introBegin').textContent = t.begin;
+    withIcon('#introBegin', 'play');
     document.querySelector('#screen-intro .intro-card').classList.remove('boss');
   }
   const begin = $('#introBegin');
@@ -193,6 +205,11 @@ function updateEconomyButtons() {
   freezeBtn.hidden = alreadyAnswered || state.lives <= 0;
   freezeBtn.disabled = state.freezeActive || balance < 10;
   freezeBtn.textContent = state.freezeActive ? '❄ Frozen' : 'Freeze Time (10 💎)';
+  // Re-prepend icons (textContent writes cleared them); cost values stay in
+  // the visible text so players can always see what an action costs.
+  withIcon('#hintBtn', 'bulb');
+  withIcon('#skipBtn', 'forward');
+  withIcon('#freezeBtn', 'snow');
   // Redesigned HUD: the diamond balance lives beside the Hint/Skip actions.
   const diamondsPill = $('#statDiamonds');
   if (diamondsPill) {
@@ -603,6 +620,10 @@ export function exitMatch() {
 
 export function initGame({ onResults }) {
   initHud();
+  withIcon('#submitBtn', 'submit');
+  withIcon('#nextBtn', 'forward');
+  withIcon('#finishBtn', 'trophy');
+  withIcon('#exitMatch', 'logout');
   $('#submitBtn').addEventListener('click', submitCurrent);
   $('#nextBtn').addEventListener('click', advance);
   $('#finishBtn').addEventListener('click', finish);

@@ -6,6 +6,7 @@ import { api } from '../api.js';
 import { $, el, showScreen, toast, spinner } from '../ui.js';
 import { campaignTheme } from '../theme.js';
 import { startMatch } from './game.js';
+import { iconSvg } from '../icons.js';
 
 export async function goCampaign() {
   showScreen('#screen-campaign');
@@ -50,6 +51,7 @@ function caseCard(cs, c) {
         }
       },
     });
+    { const svg = iconSvg(cs.completed ? 'forward' : 'play'); if (svg) action.prepend(svg); }
   } else {
     action = el('button', { class: 'btn', type: 'button', disabled: true, text: '🔒 Locked' });
   }

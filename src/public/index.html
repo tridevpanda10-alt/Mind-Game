@@ -59,15 +59,15 @@
           <span class="brand-tagline">Think · Solve · Rise</span>
         </div>
         <nav aria-label="Main">
-          <button class="nav-btn" data-nav="home">Home</button>
-          <button class="nav-btn" data-nav="play">Play</button>
-          <button class="nav-btn" data-nav="campaign">Cases</button>
-          <button class="nav-btn" data-nav="leaderboard">Ranking</button>
-          <button class="nav-btn" data-nav="skins">Skins</button>
-          <button class="nav-btn" data-nav="profile">Profile</button>
+          <button class="nav-btn" data-nav="home" data-icon="home" data-icon-only title="Home">Home</button>
+          <button class="nav-btn" data-nav="play" data-icon="play" data-icon-only title="Play">Play</button>
+          <button class="nav-btn" data-nav="campaign" data-icon="case" data-icon-only title="Cases">Cases</button>
+          <button class="nav-btn" data-nav="leaderboard" data-icon="trophy" data-icon-only title="Ranking">Ranking</button>
+          <button class="nav-btn" data-nav="skins" data-icon="palette" data-icon-only title="Skins">Skins</button>
+          <button class="nav-btn" data-nav="profile" data-icon="person" data-icon-only title="Profile">Profile</button>
         </nav>
         <button class="scheme-toggle" id="schemeToggle" type="button" aria-label="Switch color scheme">☾</button>
-        <button class="nav-btn logout" id="logoutBtn">Log out</button>
+        <button class="nav-btn logout" id="logoutBtn" data-icon="logout" data-icon-only title="Log out">Log out</button>
       </aside>
 
       <main id="main">
@@ -105,34 +105,34 @@
               <div class="row">
                 <span class="pill" id="dailyPill">Checking…</span>
               </div>
-              <button class="btn primary" data-action="daily">Play Daily</button>
+              <button class="btn primary" data-action="daily" data-icon="calendar">Play Daily</button>
             </article>
             <article class="card mode-card">
               <h3 id="tournamentTitle">Tournament</h3>
               <p id="tournamentDesc">This week's case. Entry costs 25 💎. Top detectives share the prize pool.</p>
               <div class="row"><span class="pill" id="tournamentPill">Checking…</span></div>
-              <button class="btn primary" data-action="tournament">Enter Tournament</button>
+              <button class="btn primary" data-action="tournament" data-icon="trophy">Enter Tournament</button>
             </article>
             <article class="card mode-card">
               <h3 id="quickTitle">Quick Match</h3>
               <p id="quickDesc">12 mixed puzzles. Ranked. Beat your average.</p>
-              <button class="btn" data-action="quick">Start Quick Match</button>
+              <button class="btn" data-action="quick" data-icon="bolt">Start Quick Match</button>
             </article>
             <article class="card mode-card">
               <h3 id="rankedTitle">Ranked</h3>
               <p id="rankedDesc">Quick matches move your rating. Climb the board.</p>
-              <button class="btn" data-action="quick">Play Ranked</button>
+              <button class="btn" data-action="quick" data-icon="medal">Play Ranked</button>
             </article>
             <article class="card mode-card">
               <h3 id="trainingTitle">Training</h3>
               <p id="trainingDesc">Pick a reasoning skill and difficulty. No rating risk.</p>
-              <button class="btn ghost" data-action="training">Enter Training</button>
+              <button class="btn ghost" data-action="training" data-icon="book">Enter Training</button>
             </article>
             <article class="card mode-card campaign-card-home">
               <h3 id="homeCampaignTitle">Case Board</h3>
               <p id="homeCampaignDesc">Numbered cases that unlock in order. How far can you get?</p>
               <div class="row"><span class="pill" id="campaignPill">Loading…</span></div>
-              <button class="btn" data-action="campaign">Open Case Board</button>
+              <button class="btn" data-action="campaign" data-icon="folder">Open Case Board</button>
             </article>
           </div>
           <div class="card invite-card">
@@ -140,7 +140,7 @@
             <p class="sub">Share your link. You earn <strong>+20 💎</strong> when a friend you invited finishes their first match.</p>
             <div class="row gap">
               <input type="text" id="referralLink" class="referral-input" readonly aria-label="Your referral link" />
-              <button class="btn" id="copyReferral">Copy link</button>
+              <button class="btn" id="copyReferral" data-icon="link">Copy link</button>
             </div>
             <p class="sub" id="referralStats"></p>
             <!-- AFFILIATE_SLOT -->
@@ -256,7 +256,7 @@
           <header class="screen-head"><h2>Match complete</h2></header>
           <div id="resultsBody" class="results"></div>
           <div class="row end">
-            <button class="btn primary" id="resultsHome">Back home</button>
+            <button class="btn primary" id="resultsHome" data-icon="home">Back home</button>
           </div>
         </section>
 
@@ -288,12 +288,12 @@
     </div>
 
     <nav class="bottom-nav" aria-label="Mobile navigation">
-      <button class="bnav" data-nav="home">Home</button>
-      <button class="bnav" data-nav="play">Play</button>
-      <button class="bnav" data-nav="campaign">Cases</button>
-      <button class="bnav" data-nav="leaderboard">Ranking</button>
-      <button class="bnav" data-nav="skins">Skins</button>
-      <button class="bnav" data-nav="profile">Profile</button>
+      <button class="bnav" data-nav="home" data-icon="home" data-icon-only title="Home">Home</button>
+      <button class="bnav" data-nav="play" data-icon="play" data-icon-only title="Play">Play</button>
+      <button class="bnav" data-nav="campaign" data-icon="case" data-icon-only title="Cases">Cases</button>
+      <button class="bnav" data-nav="leaderboard" data-icon="trophy" data-icon-only title="Ranking">Ranking</button>
+      <button class="bnav" data-nav="skins" data-icon="palette" data-icon-only title="Skins">Skins</button>
+      <button class="bnav" data-nav="profile" data-icon="person" data-icon-only title="Profile">Profile</button>
       <button class="scheme-toggle" id="schemeToggleM" type="button" aria-label="Switch color scheme">☾</button>
     </nav>
 
@@ -303,6 +303,7 @@
   </div>
 
   <script src="vendor/lottie-light.min.js" defer></script>
+  <script type="module" src="js/icons.js"></script>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>

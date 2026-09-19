@@ -4,6 +4,7 @@
 
 import { api, getDiamonds, setDiamonds } from '../api.js';
 import { $, el, showScreen, toast, spinner } from '../ui.js';
+import { iconSvg } from '../icons.js';
 import { THEMES, getActiveSkinId, setActiveSkin, applySkinDocument } from '../theme.js';
 
 let cache = null; // { unlocked, skins } — refreshed on every goSkins()
@@ -51,11 +52,13 @@ function skinCard(s) {
         render(); // re-render badges in place, no reload
       },
     });
+    { const svg = iconSvg('palette'); if (svg) action.prepend(svg); }
   } else if (affordable) {
     action = el('button', {
       class: 'btn primary', type: 'button', text: `Unlock for ${s.priceInDiamonds} 💎`,
       onclick: () => unlock(s.id),
     });
+    { const svg = iconSvg('gem'); if (svg) action.prepend(svg); }
   } else {
     action = el('button', {
       class: 'btn', type: 'button', disabled: true,

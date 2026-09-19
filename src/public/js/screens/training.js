@@ -2,6 +2,7 @@
 
 import { $, $$, el, showScreen } from '../ui.js';
 import { startMatch } from './game.js';
+import { iconSvg } from '../icons.js';
 
 const TYPES = [
   ['pattern', 'Pattern Completion'],
@@ -66,7 +67,9 @@ export function initTraining() {
       text: d,
     }));
   }
-  $('#startTraining').addEventListener('click', () => {
+  const startBtn = $('#startTraining');
+  { const svg = iconSvg('play'); if (svg) startBtn.prepend(svg); }
+  startBtn.addEventListener('click', () => {
     startMatch('training', { body: { types: [...selectedTypes], difficulty: selectedDiff, count: selectedCount } });
   });
 }

@@ -5,10 +5,11 @@
 import { $, el, showScreen, fmtMs, pct, toast } from '../ui.js';
 import { api, setDiamonds } from '../api.js';
 import { theme } from '../theme.js';
+import { iconSvg } from '../icons.js';
 
 const REDUCED_MOTION = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
-export function showResults(out, mode) {
+export async function showResults(out, mode) {
   const acc = out.totalCount ? out.correctCount / out.totalCount : 0;
   const failed = Boolean(out.failed);
   const ratingDelta = failed || out.ratingAfter == null || out.ratingBefore == null ? 0 : out.ratingAfter - out.ratingBefore;
@@ -78,6 +79,14 @@ export function showResults(out, mode) {
     deltaEl.textContent = ratingDelta === 0 ? '±0' : `${ratingDelta > 0 ? '+' : ''}${ratingDelta}`;
     deltaEl.className = ratingDelta >= 0 ? 'delta-up' : 'delta-down';
   }
+  // Keep the in-game HUD's rating chip honest for the next match: re-pull the
+  // player (server state) and remember this match's delta for the +N chip.
+  try {
+    const g = await import('./game.js');
+    g.getState().lastRatingDelta = mode === 'training' || failed ? null : ratingDelta;
+    const me = await api('GET', '/api/me');
+    setHudPlayer(me);
+  } catch { /* HUD refresh is best-effort */ }
 
   showScreen('#screen-results');
 
@@ -91,6 +100,7 @@ export function showResults(out, mode) {
   // chosen by the server via /api/config — this flow is network-agnostic.
   if (!failed) {
     const rewardedBtn = el('button', { class: 'btn', id: 'adRewardBtn', text: 'Watch Ad for +5 💎' });
+    { const svg = iconSvg('film'); if (svg) rewardedBtn.prepend(svg); }
     rewardedBtn.addEventListener('click', async () => {
       rewardedBtn.disabled = true;
       const { showRewardedAd, getActiveProviderId } = await import('../ads.js');
@@ -161,6 +171,7 @@ function confettiBurst() {
 function shareRow(out, mode, acc) {
   const row = el('div', { class: 'row gap' });
   const btn = el('button', { class: 'btn', type: 'button', text: 'Share score' });
+  { const svg = iconSvg('share'); if (svg) btn.prepend(svg); }
   btn.addEventListener('click', () => shareScore(out, mode, acc, btn));
   row.append(btn);
   return row;

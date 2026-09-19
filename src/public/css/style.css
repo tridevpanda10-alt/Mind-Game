@@ -159,6 +159,51 @@ button:focus-visible, input:focus-visible, .tab:focus-visible, .opt:focus-visibl
 .nav-btn { display: block; width: 100%; text-align: left; padding: 10px 12px; border-radius: 8px; margin: 2px 8px; }
 .nav-btn:hover, .bnav:hover { color: var(--text); background: var(--hover-wash); }
 .nav-btn.logout { color: var(--muted); margin-top: auto; }
+
+/* ── icon system: inline SVG, no fonts, no external assets ─────────── */
+svg.icon {
+  flex: 0 0 auto;
+  width: 18px; height: 18px;
+  vertical-align: -3px;
+}
+/* Icon-first CTAs: glyph + label on one line, aligned */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.btn svg.icon { width: 17px; height: 17px; }
+/* Icon-only nav buttons: centered glyph, tooltip carries the label.
+   The text node stays in the DOM for assistive tech but is visually
+   collapsed via font-size: 0 (SVGs keep their absolute pixel size). */
+.nav-btn.icon-only, .bnav.icon-only {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; padding: 0; margin: 3px 8px;
+  position: relative;
+  color: var(--muted);
+  font-size: 0;
+}
+.nav-btn.icon-only svg.icon { width: 21px; height: 21px; }
+.nav-btn.icon-only:hover, .nav-btn.icon-only.active { color: var(--text); }
+.nav-btn.icon-only.active { color: var(--accent); background: var(--hover-wash); }
+.nav-btn.icon-only.logout:hover { color: var(--text); }
+/* Tooltip on hover/focus (aria-label still present for AT) */
+.nav-btn.icon-only::after {
+  content: attr(title);
+  position: absolute; left: calc(100% + 8px); top: 50%;
+  transform: translateY(-50%);
+  background: var(--card2, var(--card)); color: var(--text);
+  border: 1px solid var(--line); border-radius: 6px;
+  padding: 3px 8px; font-size: 0.75rem; white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity 0.12s ease;
+  z-index: 50;
+}
+.nav-btn.icon-only:hover::after, .nav-btn.icon-only:focus-visible::after { opacity: 1; }
+/* Mobile bottom nav: icon centered, active tinted */
+.bnav.icon-only { flex-direction: column; gap: 2px; }
+.bnav.icon-only svg.icon { width: 20px; height: 20px; }
+.bnav.icon-only.active { color: var(--accent); }
 main { flex: 1; padding-bottom: 76px; }
 
 @media (min-width: 900px) {
